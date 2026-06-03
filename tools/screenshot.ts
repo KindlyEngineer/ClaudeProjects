@@ -1,0 +1,82 @@
+// Self-verification harness: build is assumed done, this serves the production
+// build with `vite preview`, drives a headless Chromium (WebGL via SwiftShader),
+// waits for the game to render, and captures a PNG. Lets Claude *see* its output.
+//
+// Usage: npm run screenshot   (runs `vite build` first, then this)
+
+import { spawn } from "node:child_process";
+import { chromium } from "playwright";
+import { setTimeout as sleep } from "node:timers/promises";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const PORT = 4173;
+const URL = `http://localhost:${PORT}/`;
+
+async function waitForServer(url: string, timeoutMs = 20000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const r = await fetch(url);
+      if (r.ok) return;
+    } catch {
+      // server not up yet
+    }
+    await sleep(250);
+  }
+  throw new Error(`preview server did not become ready at ${url}`);
+}
+
+async function main(): Promise<number> {
+  const outDir = path.join(root, "tools", "shots");
+  mkdirSync(outDir, { recursive: true });
+  const outFile = path.join(outDir, process.argv[2] ?? "latest.png");
+
+  const server = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], {
+    cwd: root,
+    stdio: "ignore",
+  });
+
+  const errors: string[] = [];
+  try {
+    await waitForServer(URL);
+
+    const browser = await chromium.launch({
+      args: [
+        "--use-gl=angle",
+        "--use-angle=swiftshader",
+        "--enable-unsafe-swiftshader",
+        "--ignore-gpu-blocklist",
+      ],
+    });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(`console: ${m.text()}`);
+    });
+    page.on("pageerror", (e) => errors.push(`pageerror: ${String(e)}`));
+
+    await page.goto(URL, { waitUntil: "load" });
+    await page
+      .waitForFunction(() => (window as { __vantageReady?: boolean }).__vantageReady === true, {
+        timeout: 15000,
+      })
+      .catch(() => errors.push("timeout: __vantageReady never set"));
+    await page.waitForTimeout(600); // let a few more frames settle
+
+    await page.screenshot({ path: outFile });
+    console.log(`screenshot -> ${outFile}`);
+    await browser.close();
+  } finally {
+    server.kill("SIGTERM");
+  }
+
+  if (errors.length) {
+    console.error("PAGE PROBLEMS:\n  " + errors.join("\n  "));
+    return 1;
+  }
+  return 0;
+}
+
+main().then((code) => process.exit(code));

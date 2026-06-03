@@ -169,6 +169,15 @@ This is core to the "how much can Claude do solo" goal.
   leveling curves, RNG) with no browser.
 - Loop per change: `typecheck → vitest → build → screenshot → inspect`.
 
+> **Network note:** the screenshot step needs the Playwright browser CDN
+> (`cdn.playwright.dev`) or a pre-provisioned Chromium. Under a restrictive
+> network *allowlist* (as in some cloud sessions) that host may be blocked
+> (`403 Host not in allowlist`), so the visual step is skipped and verification
+> falls back to `typecheck → vitest → build`. Because Three.js geometry/mesh
+> construction needs **no** GPU, we keep as much logic as possible (movement,
+> camera math, terrain sampling, collision, leveling) in Vitest where it runs
+> headlessly regardless of network policy.
+
 ---
 
 ## 8. Performance plan
@@ -186,10 +195,13 @@ This is core to the "how much can Claude do solo" goal.
 > Each milestone ends in a **playable, screenshot-verified** state and a commit on
 > `claude/eager-thompson-TIBmS`.
 
-- **M0 — Scaffold** *(next)*
-  Vite + TS + Three.js project, game loop, tilted camera, a lit ground plane, a
-  controllable capsule (WASD), Playwright screenshot tool, Vitest wired. Verify:
-  screenshot shows player on ground from the tilt camera.
+- **M0 — Scaffold** ✅ *(done)*
+  Vite + TS + Three.js project, fixed-timestep loop w/ interpolation, tilted
+  follow-camera, lit ground + reference grid, WASD-controllable capsule,
+  Playwright screenshot tool, Vitest wired. Verified headlessly: typecheck clean,
+  13 unit tests pass (RNG determinism, vector math, player integration, render
+  interpolation, follow-cam placement), production build succeeds. Browser
+  screenshot deferred — CDN blocked by this session's network allowlist.
 
 - **M1 — Horde slice**
   SoA ECS, one billboarded chaser enemy type, spawn director, spatial-hash
