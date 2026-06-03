@@ -205,10 +205,15 @@ This is core to the "how much can Claude do solo" goal.
   in-session **screenshot renders** (capsule + cast shadow under the tilt cam)
   via the npm-delivered Chromium fallback — no network-policy change needed.
 
-- **M1 — Horde slice**
-  SoA ECS, one billboarded chaser enemy type, spawn director, spatial-hash
-  collision, one auto-weapon, enemies die + drop XP, basic HUD. Verify: screenshot
-  shows a swarm converging + projectiles.
+- **M1 — Horde slice** ✅ *(done)*
+  SoA ECS (`src/sim/`: World + free-list, SpatialHash), billboarded chaser
+  enemies with separation, a ramping spawn director, an auto-weapon firing at the
+  nearest enemy, projectile↔enemy collision, kills dropping magnet:able XP gems,
+  leveling, contact damage, and a live HUD. Verified: 20 unit tests (ECS recycle,
+  hash neighbors, spawn/weapon/kill→gem/collect→XP→level/contact/determinism)
+  plus 3 deterministic screenshots showing the swarm grow (13→33→61), kills climb
+  (7→27), level 1→3, and projectiles + gems on screen. Deterministic `?seed`,
+  `?warp`, `?pilot` URL params drive reproducible captures.
 
 - **M2 — Terrain becomes real**
   Heightmap generation + mesh, terrain-aware movement, high-ground damage bonus,

@@ -7,7 +7,10 @@
 // a Chromium build delivered through the npm registry, so it needs no access to
 // the Playwright CDN (which some network allowlists block).
 //
-// Usage: npm run screenshot   (runs `vite build` first, then this)
+// Usage: npm run screenshot                       → tools/shots/latest.png
+//        tsx tools/screenshot.ts NAME=QUERY ...    → one PNG per capture spec,
+//          e.g.  tsx tools/screenshot.ts "swarm=?seed=7&warp=12&pilot=circle"
+//          writes tools/shots/swarm.png at that deterministic sim state.
 
 import { spawn } from "node:child_process";
 import type { Browser } from "playwright-core";
@@ -59,10 +62,26 @@ async function waitForServer(url: string, timeoutMs = 20000): Promise<void> {
   throw new Error(`preview server did not become ready at ${url}`);
 }
 
+interface Capture {
+  name: string;
+  query: string;
+}
+
+/** Parse "name=query" argv specs; default to a single unparameterized shot. */
+function parseCaptures(argv: string[]): Capture[] {
+  if (argv.length === 0) return [{ name: "latest", query: "" }];
+  return argv.map((spec) => {
+    const eq = spec.indexOf("=");
+    const name = eq >= 0 ? spec.slice(0, eq) : spec;
+    const query = eq >= 0 ? spec.slice(eq + 1) : "";
+    return { name, query };
+  });
+}
+
 async function main(): Promise<number> {
   const outDir = path.join(root, "tools", "shots");
   mkdirSync(outDir, { recursive: true });
-  const outFile = path.join(outDir, process.argv[2] ?? "latest.png");
+  const captures = parseCaptures(process.argv.slice(2));
 
   const server = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], {
     cwd: root,
@@ -72,7 +91,6 @@ async function main(): Promise<number> {
   const errors: string[] = [];
   try {
     await waitForServer(URL);
-
     const browser = await launchBrowser();
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     page.on("console", (m) => {
@@ -80,16 +98,18 @@ async function main(): Promise<number> {
     });
     page.on("pageerror", (e) => errors.push(`pageerror: ${String(e)}`));
 
-    await page.goto(URL, { waitUntil: "load" });
-    await page
-      .waitForFunction(() => (window as { __vantageReady?: boolean }).__vantageReady === true, {
-        timeout: 15000,
-      })
-      .catch(() => errors.push("timeout: __vantageReady never set"));
-    await page.waitForTimeout(600); // let a few more frames settle
-
-    await page.screenshot({ path: outFile });
-    console.log(`screenshot -> ${outFile}`);
+    for (const cap of captures) {
+      const outFile = path.join(outDir, `${cap.name}.png`);
+      await page.goto(`${URL}${cap.query}`, { waitUntil: "load" });
+      await page
+        .waitForFunction(() => (window as { __vantageReady?: boolean }).__vantageReady === true, {
+          timeout: 20000,
+        })
+        .catch(() => errors.push(`timeout: __vantageReady never set (${cap.name})`));
+      await page.waitForTimeout(500); // let a few more frames settle
+      await page.screenshot({ path: outFile });
+      console.log(`screenshot -> ${outFile}  (query: ${cap.query || "none"})`);
+    }
     await browser.close();
   } finally {
     server.kill("SIGTERM");
