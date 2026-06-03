@@ -169,14 +169,22 @@ Different starting characters bias toward terrain styles:
 
 ---
 
-## 9. Open questions (to resolve as we build)
-- Continuous heightmap vs. discrete elevation tiles? (Leaning: continuous mesh,
-  but enemy pathing/high-ground checks sample it into coarse bands for clarity.)
-- How punishing should self-fall-death be? (Leaning: pits = death, ledges = damage
-  only, to keep aggression fun not fragile.)
-- Arena: fixed handcrafted vs. seeded-procedural terrain? (Leaning: seeded
-  procedural from a small set of tuned "features" so every run differs.)
-- Aim model: pure auto-target (VS) for MVP; revisit an aimed primary later if the
+## 9. Resolved questions & open ones
+Resolved during M0–M2:
+- **Run length:** 30 min max.
+- **Terrain:** continuous heightmap (not discrete tiles), **seeded-procedural
+  with handcrafted POIs** (central plateau + lethal pits). ✅ implemented in M2.
+- **Pits/ledges:** pits = instant death (player and enemies); knockback shoves
+  enemies toward them — they're kite-able kill-zones. ✅ M2.
+- **Menu flow:** end goal is title → theme selection → character selection →
+  gameplay. The `RunConfig`/`startRun` seam landed in M2; the actual shell is a
+  later milestone (M4.5) — see `architecture.md`.
+
+Still open:
+- Aim model: pure auto-target (VS) for now; revisit an aimed primary later if the
   game wants more skill expression.
+- Whether high-ground checks should snap to coarse bands for readability, or stay
+  continuous (currently continuous height delta).
+- How hard the difficulty curve should ramp, and where bosses land (M3).
 
 See `architecture.md` for the technical plan, data layout, and milestones.

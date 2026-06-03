@@ -215,10 +215,25 @@ This is core to the "how much can Claude do solo" goal.
   (7→27), level 1→3, and projectiles + gems on screen. Deterministic `?seed`,
   `?warp`, `?pilot` URL params drive reproducible captures.
 
-- **M2 — Terrain becomes real**
-  Heightmap generation + mesh, terrain-aware movement, high-ground damage bonus,
-  pits = death, knockback-off-ledges, XP gems roll downhill. Verify: high-ground
-  rule measurably changes damage; enemies path around walls.
+- **M2 — Terrain becomes real** ✅ *(done)*
+  Continuous seeded heightmap (`src/sim/terrain.ts`: fractal value-noise +
+  handcrafted POIs — central plateau + lethal pits) with `heightAt`/`gradient`/
+  `isPit`; terrain-aware movement (downhill faster, uphill slower); high-ground
+  damage rule (`src/sim/combat.ts`); pits = death (player + enemies); knockback
+  shoving enemies toward ledges; XP gems roll downhill; enemies steer to avoid
+  pits. Render: displaced, elevation-vertex-colored terrain mesh
+  (`src/render/terrainMesh.ts`) + a camera that rises/falls with the ground; HUD
+  shows live elevation. Run config seam landed too (see below). Verified: 29 unit
+  tests (terrain determinism, plateau, lethal pit, high-ground math, downhill
+  movement + gems, pit death) + 4 deterministic screenshots showing the plateau,
+  pits/craters, and a horde pathing across the relief.
+
+  **Run-config seam (groundwork for the menu flow):** a run is now parameterized
+  by `RunConfig { seed, theme, character }` (`src/config/runConfig.ts`) and
+  started via `startRun(config)` / handle `.stop()` in `main.ts` — no longer a
+  run-on-import side effect. Terrain/sky/palette come from the theme; player
+  stats from the character. Exactly one default theme (Highlands) + character
+  (Drifter) for now; the menu shell (below) will build the config.
 
 - **M3 — The build loop**
   Level-up upgrade draft, 4–6 weapons (incl. downhill/lobber/knocker archetypes),
@@ -227,7 +242,13 @@ This is core to the "how much can Claude do solo" goal.
 
 - **M4 — Feel & content pass**
   Juice (hit-stop, shake, number pops, death fx), more enemy types incl. flyers,
-  seeded-procedural arenas, audio hooks, title/death/meta screens.
+  more themes/biomes, audio hooks.
+
+- **M4.5 — Menu shell** *(the front-end flow)*
+  Game-state machine over the `startRun` seam: title → **theme selection** →
+  **character selection** → gameplay → death/results → back to menu. Multiple
+  `ThemeDef`s and `CharacterDef`s with selectable stats. The seam exists as of
+  M2, so this is UI + content, not a sim refactor.
 
 - **M5 — Ship a build**
   Static `dist/` build, simple landing page, optional GitHub Pages deploy.

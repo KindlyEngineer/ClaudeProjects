@@ -3,10 +3,11 @@
 VANTAGE is a 2.5D bullet-heaven (Vampire Survivors / Megabonk lineage) built
 from scratch in TypeScript + Three.js. Its differentiator: **the ground isn't
 flat** — elevation and terrain are first-class mechanics (high-ground combat,
-ledges/pits as kill-zones, terrain-aware enemy pathing). Currently at **M1**
-(horde slice: SoA ECS, billboarded enemy swarm, auto-weapon, XP gems, leveling,
-HUD). See `docs/game/` for the full design doc, architecture, and milestone
-roadmap (M0–M5).
+ledges/pits as kill-zones, terrain-aware enemy pathing). Currently at **M2**
+(terrain is live: seeded heightmap, high-ground damage, lethal pits, knockback,
+downhill-rolling XP gems — on top of the M1 horde loop). A `RunConfig`
+{seed,theme,character} seam + `startRun()` is in place for the future
+menu flow. See `docs/game/` for the design doc, architecture, and roadmap.
 
 ## Stack
 - Language / runtime: TypeScript on Node 22 (ships to the browser)

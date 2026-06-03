@@ -21,6 +21,9 @@ export class World {
   readonly radius: Float32Array;
   readonly ttl: Float32Array; // seconds remaining (used by projectiles)
   readonly amount: Float32Array; // projectile damage OR gem xp value
+  readonly kx: Float32Array; // knockback velocity (enemies)
+  readonly kz: Float32Array;
+  readonly aux: Float32Array; // projectile: shooter's ground height (for high-ground)
 
   /** Number of live entities (any kind). */
   aliveCount = 0;
@@ -38,6 +41,9 @@ export class World {
     this.radius = new Float32Array(cap);
     this.ttl = new Float32Array(cap);
     this.amount = new Float32Array(cap);
+    this.kx = new Float32Array(cap);
+    this.kz = new Float32Array(cap);
+    this.aux = new Float32Array(cap);
     // Fill the free list high→low so the first spawns get low indices.
     for (let i = cap - 1; i >= 0; i--) this.freeList.push(i);
   }
@@ -57,6 +63,8 @@ export class World {
     this.alive[id] = 0;
     this.vx[id] = 0;
     this.vz[id] = 0;
+    this.kx[id] = 0;
+    this.kz[id] = 0;
     this.aliveCount--;
     this.freeList.push(id);
   }

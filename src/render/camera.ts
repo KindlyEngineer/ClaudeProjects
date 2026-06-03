@@ -9,9 +9,10 @@ export interface Vec3 {
   z: number;
 }
 
-/** World-space camera position for a given focus point on the ground (XZ). */
-export function cameraPosition(focusX: number, focusZ: number): Vec3 {
-  return { x: focusX, y: CAMERA_HEIGHT, z: focusZ + CAMERA_DISTANCE };
+/** World-space camera position for a focus point. `focusY` lets the camera
+ *  rise/fall with terrain elevation under the player. */
+export function cameraPosition(focusX: number, focusZ: number, focusY = 0): Vec3 {
+  return { x: focusX, y: focusY + CAMERA_HEIGHT, z: focusZ + CAMERA_DISTANCE };
 }
 
 /** Camera tilt below horizontal, in radians, derived from the placement. */

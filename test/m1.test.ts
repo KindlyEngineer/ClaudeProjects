@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { World, KIND_ENEMY, KIND_GEM, KIND_PROJECTILE } from "../src/sim/world";
 import { SpatialHash } from "../src/sim/spatialHash";
 import { Sim, type InputState } from "../src/sim/sim";
+import { defaultRunConfig } from "../src/config/runConfig";
 
 const STILL: InputState = { x: 0, z: 0 };
 
@@ -47,13 +48,13 @@ describe("spatial hash", () => {
 
 describe("M1 horde loop (features actually fire)", () => {
   it("the spawn director produces a growing swarm", () => {
-    const sim = new Sim(7);
+    const sim = new Sim(defaultRunConfig(7));
     run(sim, 5);
     expect(sim.world.countOf(KIND_ENEMY)).toBeGreaterThan(5);
   });
 
   it("the auto-weapon spawns projectiles when enemies are in range", () => {
-    const sim = new Sim(7);
+    const sim = new Sim(defaultRunConfig(7));
     // Let enemies approach, then check projectiles exist at least once.
     let sawProjectile = false;
     const dt = 1 / 60;
@@ -65,7 +66,7 @@ describe("M1 horde loop (features actually fire)", () => {
   });
 
   it("kills accumulate and each kill drops an XP gem", () => {
-    const sim = new Sim(7);
+    const sim = new Sim(defaultRunConfig(7));
     run(sim, 12);
     expect(sim.kills).toBeGreaterThan(0);
     // Gems are dropped on kill (some may already be collected, so check totals).
@@ -73,21 +74,21 @@ describe("M1 horde loop (features actually fire)", () => {
   });
 
   it("collecting gems grants XP and levels the player up", () => {
-    const sim = new Sim(7);
+    const sim = new Sim(defaultRunConfig(7));
     run(sim, 20); // standing still: enemies pile on, die, gems get magneted in
     expect(sim.kills).toBeGreaterThan(0);
     expect(sim.level).toBeGreaterThan(1);
   });
 
   it("standing in the swarm costs the player HP", () => {
-    const sim = new Sim(7);
+    const sim = new Sim(defaultRunConfig(7));
     run(sim, 20);
     expect(sim.playerHp).toBeLessThan(100);
   });
 
   it("is deterministic for a given seed", () => {
-    const a = new Sim(42);
-    const b = new Sim(42);
+    const a = new Sim(defaultRunConfig(42));
+    const b = new Sim(defaultRunConfig(42));
     run(a, 6);
     run(b, 6);
     expect(a.kills).toBe(b.kills);

@@ -1,13 +1,12 @@
 import * as THREE from "three";
-import { lerp } from "../core/math";
 
 // Render view for the player: owns the capsule mesh and positions it from the
-// Sim's player state, interpolating between the previous and current sim step
-// for smooth motion. (Player movement itself lives in the Sim.)
+// Sim's player state. (Player movement itself lives in the Sim; the caller
+// interpolates XZ and samples the ground height.)
 
 const CAPSULE_RADIUS = 0.5;
 const CAPSULE_LENGTH = 1.0;
-// Capsule total height = length + 2*radius = 2 → center sits at y=1 on flat ground.
+// Capsule total height = length + 2*radius = 2 → center sits REST_Y above ground.
 const REST_Y = CAPSULE_LENGTH / 2 + CAPSULE_RADIUS;
 
 export class PlayerView {
@@ -21,8 +20,8 @@ export class PlayerView {
     this.mesh.position.set(0, REST_Y, 0);
   }
 
-  /** Position the mesh at the interpolated player location. */
-  sync(prevX: number, prevZ: number, curX: number, curZ: number, alpha: number): void {
-    this.mesh.position.set(lerp(prevX, curX, alpha), REST_Y, lerp(prevZ, curZ, alpha));
+  /** Place the capsule at (x, z) resting on terrain of height `groundY`. */
+  sync(x: number, z: number, groundY: number): void {
+    this.mesh.position.set(x, groundY + REST_Y, z);
   }
 }

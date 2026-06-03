@@ -1,22 +1,23 @@
 import * as THREE from "three";
 import { cameraPosition } from "./camera";
+import type { ThemeDef } from "../config/runConfig";
 
-// Owns the Three.js renderer, scene, camera, lights and the (M0 flat) ground.
-// The camera is a perspective tilt-follow cam — the angle that gives the 2.5D
-// depth/parallax look. Heightmapped terrain replaces the flat ground in M2.
+// Owns the Three.js renderer, scene, camera and lights. Sky/fog come from the
+// run's theme; the terrain mesh is added by the caller. The camera is a
+// perspective tilt-follow cam that rises and falls with the ground height under
+// the player — so elevation reads through the whole frame.
 
 export interface View {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   resize: () => void;
-  followCamera: (x: number, z: number) => void;
+  followCamera: (x: number, y: number, z: number) => void;
   render: () => void;
+  dispose: () => void;
 }
 
-const SKY = 0x0b0d12;
-
-export function createView(container: HTMLElement): View {
+export function createView(container: HTMLElement, theme: ThemeDef): View {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
@@ -24,43 +25,24 @@ export function createView(container: HTMLElement): View {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(SKY);
-  scene.fog = new THREE.Fog(SKY, 45, 130); // depth cueing
+  scene.background = new THREE.Color(theme.palette.sky);
+  scene.fog = new THREE.Fog(theme.palette.fog, 55, 150); // depth cueing
 
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
 
-  // Lighting: cool ambient hemisphere + a warm key/sun that casts shadows.
-  scene.add(new THREE.HemisphereLight(0x9fb4ff, 0x202a3a, 0.7));
+  scene.add(new THREE.HemisphereLight(0x9fb4ff, 0x202a3a, 0.75));
   const sun = new THREE.DirectionalLight(0xfff2d6, 1.15);
   sun.position.set(24, 40, 12);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  const span = 45;
+  const span = 60;
   sun.shadow.camera.left = -span;
   sun.shadow.camera.right = span;
   sun.shadow.camera.top = span;
   sun.shadow.camera.bottom = -span;
-  sun.shadow.camera.far = 120;
+  sun.shadow.camera.far = 160;
   scene.add(sun);
   scene.add(sun.target);
-
-  // Flat ground (placeholder until the M2 heightmap).
-  const groundGeo = new THREE.PlaneGeometry(400, 400, 1, 1);
-  groundGeo.rotateX(-Math.PI / 2);
-  const ground = new THREE.Mesh(
-    groundGeo,
-    new THREE.MeshStandardMaterial({ color: 0x2a3346, roughness: 1.0 }),
-  );
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  // Reference grid so motion/scale read clearly while there's no terrain yet.
-  const grid = new THREE.GridHelper(400, 80, 0x3b4a66, 0x1c2536);
-  const gmat = grid.material as THREE.Material;
-  gmat.transparent = true;
-  gmat.opacity = 0.5;
-  grid.position.y = 0.01;
-  scene.add(grid);
 
   const resize = () => {
     const w = container.clientWidth || window.innerWidth;
@@ -72,14 +54,18 @@ export function createView(container: HTMLElement): View {
   resize();
 
   const focus = new THREE.Vector3();
-  const followCamera = (x: number, z: number) => {
-    const p = cameraPosition(x, z);
+  const followCamera = (x: number, y: number, z: number) => {
+    const p = cameraPosition(x, z, y);
     camera.position.set(p.x, p.y, p.z);
-    camera.lookAt(focus.set(x, 0, z));
-    sun.target.position.set(x, 0, z); // keep shadow frustum around the player
+    camera.lookAt(focus.set(x, y, z));
+    sun.target.position.set(x, y, z); // keep the shadow frustum on the player
   };
 
   const render = () => renderer.render(scene, camera);
+  const dispose = () => {
+    renderer.dispose();
+    renderer.domElement.remove();
+  };
 
-  return { renderer, scene, camera, resize, followCamera, render };
+  return { renderer, scene, camera, resize, followCamera, render, dispose };
 }
