@@ -17,9 +17,11 @@ if [ -f package.json ] && [ ! -d node_modules ]; then
   fi
 fi
 
-# Playwright Chromium powers the headless screenshot self-verification harness.
+# Optional: full upstream Chromium, only if the Playwright CDN is allowlisted.
+# The screenshot harness falls back to @sparticuz/chromium (delivered via npm),
+# so a failure here is harmless — silenced to avoid alarming session-start logs.
 if [ -f package.json ] && grep -q '"playwright"' package.json 2>/dev/null; then
-  npx --yes playwright install chromium || true
+  npx --yes playwright install chromium >/dev/null 2>&1 || true
 fi
 
 # --- Python ---
