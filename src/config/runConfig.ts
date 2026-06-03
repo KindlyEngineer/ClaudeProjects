@@ -5,21 +5,20 @@ import { PLAYER_MAX_HP, PLAYER_SPEED } from "./balance";
 // will build a RunConfig and hand it to startRun(). For now there is exactly
 // one default theme and one default character — no selection UI yet.
 
-/** Terrain generation + look for a "level theme". */
+/** A "level theme": which tile-chunk set to assemble from + how it looks. */
 export interface ThemeDef {
   readonly name: string;
-  readonly terrain: {
-    readonly amplitude: number; // peak hill height
-    readonly frequency: number; // base noise frequency (smaller = broader hills)
-    readonly octaves: number; // fractal detail layers
-    readonly plateau: number; // height of the central high-ground plateau
-    readonly pits: number; // number of lethal pit craters carved in
-  };
+  /** Names of chunk templates this theme draws from (see sim/levelGen). */
+  readonly chunks: readonly string[];
+  /** Relative odds of an empty/open chunk, biasing arenas toward open space. */
+  readonly openBias: number;
   readonly palette: {
     readonly sky: number;
     readonly fog: number;
-    readonly low: number; // vertex color at low elevation
-    readonly high: number; // vertex color at high elevation
+    readonly floor: number;
+    readonly wall: number;
+    readonly cover: number;
+    readonly hazard: number; // emissive danger tiles
   };
 }
 
@@ -30,16 +29,18 @@ export interface CharacterDef {
   readonly moveSpeed: number;
 }
 
-export interface RunConfig {
-  readonly seed: number;
-  readonly theme: ThemeDef;
-  readonly character: CharacterDef;
-}
-
-export const HIGHLANDS: ThemeDef = {
-  name: "Highlands",
-  terrain: { amplitude: 7, frequency: 0.045, octaves: 4, plateau: 6, pits: 3 },
-  palette: { sky: 0x0b0d12, fog: 0x0b0d12, low: 0x223047, high: 0x6f8fb8 },
+export const FOUNDRY: ThemeDef = {
+  name: "Foundry",
+  chunks: ["open", "pillars", "barrier", "crates", "hazard", "elbow"],
+  openBias: 3,
+  palette: {
+    sky: 0x0b0d12,
+    fog: 0x0b0d12,
+    floor: 0x2b3242,
+    wall: 0x55617a,
+    cover: 0x6b5942,
+    hazard: 0xff5a3c,
+  },
 };
 
 export const DEFAULT_CHARACTER: CharacterDef = {
@@ -49,5 +50,11 @@ export const DEFAULT_CHARACTER: CharacterDef = {
 };
 
 export function defaultRunConfig(seed = 1): RunConfig {
-  return { seed, theme: HIGHLANDS, character: DEFAULT_CHARACTER };
+  return { seed, theme: FOUNDRY, character: DEFAULT_CHARACTER };
+}
+
+export interface RunConfig {
+  readonly seed: number;
+  readonly theme: ThemeDef;
+  readonly character: CharacterDef;
 }

@@ -77,7 +77,7 @@ describe("M1 horde loop (features actually fire)", () => {
     const sim = new Sim(defaultRunConfig(7));
     run(sim, 20); // standing still: enemies pile on, die, gems get magneted in
     expect(sim.kills).toBeGreaterThan(0);
-    expect(sim.level).toBeGreaterThan(1);
+    expect(sim.playerLevel).toBeGreaterThan(1);
   });
 
   it("standing in the swarm costs the player HP", () => {

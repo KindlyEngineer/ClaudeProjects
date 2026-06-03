@@ -1,13 +1,18 @@
 # Project: VANTAGE
 
 VANTAGE is a 2.5D bullet-heaven (Vampire Survivors / Megabonk lineage) built
-from scratch in TypeScript + Three.js. Its differentiator: **the ground isn't
-flat** — elevation and terrain are first-class mechanics (high-ground combat,
-ledges/pits as kill-zones, terrain-aware enemy pathing). Currently at **M2**
-(terrain is live: seeded heightmap, high-ground damage, lethal pits, knockback,
-downhill-rolling XP gems — on top of the M1 horde loop). A `RunConfig`
-{seed,theme,character} seam + `startRun()` is in place for the future
-menu flow. See `docs/game/` for the design doc, architecture, and roadmap.
+from scratch in TypeScript + Three.js. Its differentiator: **the arena is real
+tactical space** — tile-based levels of walls, cover and hazards that block
+movement, projectiles and line-of-sight and funnel the horde (a more open
+SYNTHETIK 2). Currently at **M2** (tile arenas: seeded chunk assembly, wall
+collision, LOS-gated weapon, hazard kill-zones, flow-field horde pathing — on
+the M1 horde loop). A `RunConfig {seed,theme,character}` seam + `startRun()` is
+in place for the future menu flow (theme = tileset). See `docs/game/` for the
+design doc, architecture, and roadmap.
+
+> Note: an earlier M2 explored a continuous-heightmap *verticality* mechanic;
+> it was reassessed and replaced by the tile/geometry approach above. The name
+> "VANTAGE" predates that pivot and may be revisited.
 
 ## Stack
 - Language / runtime: TypeScript on Node 22 (ships to the browser)
@@ -18,11 +23,12 @@ menu flow. See `docs/game/` for the design doc, architecture, and roadmap.
 ## Layout
 - `src/` — game source
   - `core/` — loop (fixed timestep + interpolation), RNG, math helpers
-  - `sim/` — pure (GPU-free) game sim: SoA `World`, `SpatialHash`, `Sim` systems
-  - `render/` — Three.js scene, camera math, billboard layers, sprite textures
+  - `sim/` — pure (GPU-free) game sim: SoA `World`, `Sim` systems, tile `Level`,
+    `levelGen` (chunk assembly), `flowField` (horde pathing), `spatialHash`
+  - `render/` — Three.js scene, camera math, billboards, `levelMesh`, textures
   - `game/` — player view, input, autopilot
   - `ui/` — DOM HUD
-  - `config/` — `balance.ts`, all tunable numbers in one place
+  - `config/` — `balance.ts` (tunables), `runConfig.ts` (theme/character seam)
 - `test/` — Vitest unit tests for pure sim logic (run headlessly, no GPU)
 - `tools/` — `screenshot.ts` self-verification harness
 - `scripts/` — automation, including the session-start dependency installer

@@ -1,17 +1,12 @@
 import {
-  ARENA_RADIUS,
   ENEMY_CONTACT_DPS,
   ENEMY_HP,
-  ENEMY_PIT_AVOID,
-  ENEMY_PIT_LOOKAHEAD,
   ENEMY_RADIUS,
   ENEMY_SEPARATION,
   ENEMY_SPEED,
+  FLOW_REBUILD_TICKS,
   GEM_MAGNET_RADIUS,
   GEM_MAGNET_SPEED,
-  GEM_ROLL_FRICTION,
-  GEM_ROLL_GRAVITY,
-  GEM_ROLL_MAX_SPEED,
   GEM_VALUE,
   KNOCKBACK_DECAY,
   KNOCKBACK_IMPULSE,
@@ -20,9 +15,6 @@ import {
   PROJECTILE_RADIUS,
   PROJECTILE_SPEED,
   PROJECTILE_TTL,
-  SLOPE_SPEED_FACTOR,
-  SLOPE_SPEED_MAX,
-  SLOPE_SPEED_MIN,
   SPAWN_BATCH,
   SPAWN_INTERVAL_MIN,
   SPAWN_INTERVAL_START,
@@ -35,9 +27,10 @@ import {
 import type { RunConfig } from "../config/runConfig";
 import { clamp, normalize2 } from "../core/math";
 import { mulberry32, type Rng } from "../core/rng";
-import { highGroundMultiplier } from "./combat";
+import { FlowField } from "./flowField";
+import { generateLevel, snapToFloor } from "./levelGen";
+import { Level } from "./level";
 import { SpatialHash } from "./spatialHash";
-import { Terrain } from "./terrain";
 import { KIND_ENEMY, KIND_GEM, KIND_PROJECTILE, World } from "./world";
 
 export interface InputState {
@@ -49,28 +42,30 @@ const PLAYER_RADIUS = 0.5;
 const HASH_CELL = 2;
 
 // The whole game simulation: pure typed-array state advanced by a fixed step.
-// Deterministic given a RunConfig (seed + theme + character). M2 makes terrain a
-// first-class input: movement, combat, gems and deaths all read the heightmap.
+// Deterministic given a RunConfig. The arena is a tile grid (sim/level): a flat
+// walkable floor with blocking walls/cover and lethal hazard tiles. Geometry —
+// not height — is the differentiator: it stops movement, blocks line of fire,
+// funnels the flow-field horde, and (via knockback) becomes a kill-zone.
 export class Sim {
   readonly world = new World();
-  readonly terrain: Terrain;
+  readonly level: Level;
+  private readonly flow: FlowField;
   private readonly hash = new SpatialHash(HASH_CELL);
   private readonly rng: Rng;
   private readonly moveSpeed: number;
   private readonly maxHp: number;
 
   time = 0;
+  private tick = 0;
 
-  // Player sim state (prev kept for render interpolation).
   playerX = 0;
   playerZ = 0;
   playerPrevX = 0;
   playerPrevZ = 0;
   playerHp: number;
 
-  // Run stats.
   xp = 0;
-  level = 1;
+  playerLevel = 1;
   kills = 0;
 
   private spawnTimer = 0;
@@ -78,27 +73,28 @@ export class Sim {
 
   constructor(config: RunConfig) {
     this.rng = mulberry32(config.seed);
-    this.terrain = new Terrain(config.seed, config.theme.terrain, ARENA_RADIUS);
+    this.level = generateLevel(config.seed, config.theme);
+    this.flow = new FlowField(this.level.cols, this.level.rows);
     this.moveSpeed = config.character.moveSpeed;
     this.maxHp = config.character.maxHp;
     this.playerHp = this.maxHp;
-    // The player starts on the central plateau — a handcrafted safe high-ground spawn.
+    const start = snapToFloor(this.level, 0, 0); // central plaza is open
+    this.playerX = start.x;
+    this.playerZ = start.z;
   }
 
-  /** XP needed to reach the next level. */
   xpForNextLevel(): number {
-    return this.level * XP_BASE_PER_LEVEL;
-  }
-
-  /** Ground height under the player (for camera + render). */
-  playerGroundY(): number {
-    return this.terrain.heightAt(this.playerX, this.playerZ);
+    return this.playerLevel * XP_BASE_PER_LEVEL;
   }
 
   update(dt: number, input: InputState): void {
     this.time += dt;
+    this.tick++;
     this.movePlayer(dt, input);
     this.spawnEnemies(dt);
+    if (this.tick % FLOW_REBUILD_TICKS === 1) {
+      this.flow.rebuild(this.level, this.level.cellX(this.playerX), this.level.cellZ(this.playerZ));
+    }
     this.rebuildEnemyHash();
     this.updateEnemies(dt);
     this.fireWeapon(dt);
@@ -108,11 +104,13 @@ export class Sim {
     this.applyContactDamage(dt);
   }
 
-  /** Speed multiplier for heading (dirX,dirZ) at (x,z): downhill faster, uphill slower. */
-  private slopeScale(x: number, z: number, dirX: number, dirZ: number): number {
-    const { gx, gz } = this.terrain.gradient(x, z);
-    const downhill = -(dirX * gx + dirZ * gz); // moving against the uphill gradient
-    return clamp(1 + SLOPE_SPEED_FACTOR * downhill, SLOPE_SPEED_MIN, SLOPE_SPEED_MAX);
+  /** Move from (x,z) by (dx,dz), sliding along solid tiles. */
+  private resolveMove(x: number, z: number, dx: number, dz: number): [number, number] {
+    let nx = x + dx;
+    if (this.level.blocksMovement(nx, z)) nx = x;
+    let nz = z + dz;
+    if (this.level.blocksMovement(nx, nz)) nz = z;
+    return [nx, nz];
   }
 
   private movePlayer(dt: number, input: InputState): void {
@@ -120,18 +118,11 @@ export class Sim {
     this.playerPrevZ = this.playerZ;
     const len = Math.hypot(input.x, input.z);
     if (len > 0) {
-      const dx = input.x / len;
-      const dz = input.z / len;
-      const scale = this.slopeScale(this.playerX, this.playerZ, dx, dz);
-      this.playerX += input.x * this.moveSpeed * scale * dt;
-      this.playerZ += input.z * this.moveSpeed * scale * dt;
-      const r = Math.hypot(this.playerX, this.playerZ);
-      if (r > ARENA_RADIUS) {
-        this.playerX *= ARENA_RADIUS / r;
-        this.playerZ *= ARENA_RADIUS / r;
-      }
+      const dx = (input.x / len) * this.moveSpeed * dt;
+      const dz = (input.z / len) * this.moveSpeed * dt;
+      [this.playerX, this.playerZ] = this.resolveMove(this.playerX, this.playerZ, dx, dz);
     }
-    if (this.terrain.isPit(this.playerX, this.playerZ)) this.playerHp = 0; // fell into a pit
+    if (this.level.isHazard(this.playerX, this.playerZ)) this.playerHp = 0;
   }
 
   private spawnEnemies(dt: number): void {
@@ -140,13 +131,16 @@ export class Sim {
     const t = clamp(this.time / SPAWN_RAMP_SEC, 0, 1);
     this.spawnTimer += SPAWN_INTERVAL_START + (SPAWN_INTERVAL_MIN - SPAWN_INTERVAL_START) * t;
     for (let n = 0; n < SPAWN_BATCH; n++) {
+      const a = this.rng() * Math.PI * 2;
+      const sx = this.playerX + Math.cos(a) * SPAWN_RING_RADIUS;
+      const sz = this.playerZ + Math.sin(a) * SPAWN_RING_RADIUS;
+      const spot = snapToFloor(this.level, sx, sz); // never spawn inside geometry
       const id = this.world.spawn();
       if (id < 0) return;
-      const a = this.rng() * Math.PI * 2;
       const w = this.world;
       w.kind[id] = KIND_ENEMY;
-      w.px[id] = this.playerX + Math.cos(a) * SPAWN_RING_RADIUS;
-      w.pz[id] = this.playerZ + Math.sin(a) * SPAWN_RING_RADIUS;
+      w.px[id] = spot.x;
+      w.pz[id] = spot.z;
       w.vx[id] = 0;
       w.vz[id] = 0;
       w.kx[id] = 0;
@@ -171,9 +165,13 @@ export class Sim {
       if (w.alive[i] !== 1 || w.kind[i] !== KIND_ENEMY) continue;
       const xi = w.px[i];
       const zi = w.pz[i];
-      // Steer toward the player.
-      let [dirX, dirZ] = normalize2(this.playerX - xi, this.playerZ - zi);
-      // Soft separation from nearby enemies so the swarm spreads out.
+      // Flow-field direction toward the player (routes around walls); fall back
+      // to a straight beeline if this cell wasn't reached by the BFS.
+      const { fx, fz } = this.flow.sampleCell(this.level.cellX(xi), this.level.cellZ(zi));
+      let dirX = fx;
+      let dirZ = fz;
+      if (fx === 0 && fz === 0) [dirX, dirZ] = normalize2(this.playerX - xi, this.playerZ - zi);
+      // Soft separation so the swarm spreads instead of stacking.
       let sepX = 0;
       let sepZ = 0;
       this.hash.forEachNear(xi, zi, (j) => {
@@ -188,33 +186,20 @@ export class Sim {
           sepZ += ddz / d;
         }
       });
-      dirX += sepX * ENEMY_SEPARATION;
-      dirZ += sepZ * ENEMY_SEPARATION;
-      // Pit avoidance: if there's a pit just ahead, steer toward higher ground.
-      const aheadX = xi + dirX * ENEMY_PIT_LOOKAHEAD;
-      const aheadZ = zi + dirZ * ENEMY_PIT_LOOKAHEAD;
-      if (this.terrain.isPit(aheadX, aheadZ)) {
-        const { gx, gz } = this.terrain.gradient(aheadX, aheadZ); // uphill = away from pit floor
-        const [ax, az] = normalize2(gx, gz);
-        dirX += ax * ENEMY_PIT_AVOID;
-        dirZ += az * ENEMY_PIT_AVOID;
-      }
-      [dirX, dirZ] = normalize2(dirX, dirZ);
-      const scale = this.slopeScale(xi, zi, dirX, dirZ);
-      w.vx[i] = dirX * ENEMY_SPEED * scale;
-      w.vz[i] = dirZ * ENEMY_SPEED * scale;
-      // Integrate steering + decaying knockback.
-      w.px[i] += (w.vx[i] + w.kx[i]) * dt;
-      w.pz[i] += (w.vz[i] + w.kz[i]) * dt;
+      [dirX, dirZ] = normalize2(dirX + sepX * ENEMY_SEPARATION, dirZ + sepZ * ENEMY_SEPARATION);
+      w.vx[i] = dirX * ENEMY_SPEED;
+      w.vz[i] = dirZ * ENEMY_SPEED;
+      const dx = (w.vx[i] + w.kx[i]) * dt;
+      const dz = (w.vz[i] + w.kz[i]) * dt;
+      [w.px[i], w.pz[i]] = this.resolveMove(xi, zi, dx, dz);
       w.kx[i] *= kbDecay;
       w.kz[i] *= kbDecay;
-      // Shoved or wandered into a pit → killed (a terrain kill still drops a gem).
-      if (this.terrain.isPit(w.px[i], w.pz[i])) this.killEnemy(i);
+      if (this.level.isHazard(w.px[i], w.pz[i])) this.killEnemy(i); // shoved into a hazard
     }
   }
 
-  /** Nearest live enemy to the player within range, or -1. */
-  private nearestEnemy(): number {
+  /** Nearest enemy with clear line of fire, within range, or -1. */
+  private nearestVisibleEnemy(): number {
     const w = this.world;
     let best = -1;
     let bestD2 = WEAPON_RANGE * WEAPON_RANGE;
@@ -223,10 +208,10 @@ export class Sim {
       const dx = w.px[i] - this.playerX;
       const dz = w.pz[i] - this.playerZ;
       const d2 = dx * dx + dz * dz;
-      if (d2 < bestD2) {
-        bestD2 = d2;
-        best = i;
-      }
+      if (d2 >= bestD2) continue;
+      if (!this.level.hasLineOfSight(this.playerX, this.playerZ, w.px[i], w.pz[i])) continue;
+      bestD2 = d2;
+      best = i;
     }
     return best;
   }
@@ -234,7 +219,7 @@ export class Sim {
   private fireWeapon(dt: number): void {
     this.fireTimer -= dt;
     if (this.fireTimer > 0) return;
-    const target = this.nearestEnemy();
+    const target = this.nearestVisibleEnemy();
     if (target < 0) return;
     this.fireTimer += WEAPON_COOLDOWN;
     const w = this.world;
@@ -249,7 +234,6 @@ export class Sim {
     w.ttl[id] = PROJECTILE_TTL;
     w.radius[id] = PROJECTILE_RADIUS;
     w.amount[id] = PROJECTILE_DAMAGE;
-    w.aux[id] = this.playerGroundY(); // shooter height, for the high-ground bonus
   }
 
   private updateProjectiles(dt: number): void {
@@ -263,6 +247,10 @@ export class Sim {
       }
       w.px[i] += w.vx[i] * dt;
       w.pz[i] += w.vz[i] * dt;
+      if (this.level.blocksProjectile(w.px[i], w.pz[i])) {
+        w.free(i); // absorbed by wall/cover
+        continue;
+      }
       let hit = -1;
       const reach = w.radius[i] + ENEMY_RADIUS;
       const xi = w.px[i];
@@ -274,10 +262,7 @@ export class Sim {
         if (dx * dx + dz * dz <= reach * reach) hit = j;
       });
       if (hit >= 0) {
-        const targetY = this.terrain.heightAt(w.px[hit], w.pz[hit]);
-        const mult = highGroundMultiplier(w.aux[i], targetY);
-        w.hp[hit] -= w.amount[i] * mult;
-        // Knockback away from the player — ideally off a ledge into a pit.
+        w.hp[hit] -= w.amount[i];
         const [kdx, kdz] = normalize2(w.px[hit] - this.playerX, w.pz[hit] - this.playerZ);
         w.kx[hit] += kdx * KNOCKBACK_IMPULSE;
         w.kz[hit] += kdz * KNOCKBACK_IMPULSE;
@@ -305,7 +290,6 @@ export class Sim {
 
   private updateGems(dt: number): void {
     const w = this.world;
-    const friction = Math.max(0, 1 - GEM_ROLL_FRICTION * dt);
     for (let i = 0; i < w.cap; i++) {
       if (w.alive[i] !== 1 || w.kind[i] !== KIND_GEM) continue;
       const dx = this.playerX - w.px[i];
@@ -317,23 +301,9 @@ export class Sim {
         continue;
       }
       if (d <= GEM_MAGNET_RADIUS && d > 0) {
-        // Magnet overrides rolling once the player is close.
         w.px[i] += (dx / d) * GEM_MAGNET_SPEED * dt;
         w.pz[i] += (dz / d) * GEM_MAGNET_SPEED * dt;
-        continue;
       }
-      // Otherwise gems roll downhill (along the negative gradient).
-      const { gx, gz } = this.terrain.gradient(w.px[i], w.pz[i]);
-      w.vx[i] = (w.vx[i] - gx * GEM_ROLL_GRAVITY * dt) * friction;
-      w.vz[i] = (w.vz[i] - gz * GEM_ROLL_GRAVITY * dt) * friction;
-      const speed = Math.hypot(w.vx[i], w.vz[i]);
-      if (speed > GEM_ROLL_MAX_SPEED) {
-        w.vx[i] *= GEM_ROLL_MAX_SPEED / speed;
-        w.vz[i] *= GEM_ROLL_MAX_SPEED / speed;
-      }
-      w.px[i] += w.vx[i] * dt;
-      w.pz[i] += w.vz[i] * dt;
-      if (this.terrain.isPit(w.px[i], w.pz[i])) w.free(i); // rolled into a pit — lost
     }
   }
 
@@ -341,7 +311,7 @@ export class Sim {
     let need = this.xpForNextLevel();
     while (this.xp >= need) {
       this.xp -= need;
-      this.level++;
+      this.playerLevel++;
       need = this.xpForNextLevel();
     }
   }

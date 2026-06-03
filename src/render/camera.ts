@@ -9,8 +9,8 @@ export interface Vec3 {
   z: number;
 }
 
-/** World-space camera position for a focus point. `focusY` lets the camera
- *  rise/fall with terrain elevation under the player. */
+/** World-space camera position for a focus point. `focusY` offsets the whole
+ *  rig vertically (0 on the flat arena floor). */
 export function cameraPosition(focusX: number, focusZ: number, focusY = 0): Vec3 {
   return { x: focusX, y: focusY + CAMERA_HEIGHT, z: focusZ + CAMERA_DISTANCE };
 }

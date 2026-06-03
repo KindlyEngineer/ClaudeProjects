@@ -20,7 +20,7 @@ export class PlayerView {
     this.mesh.position.set(0, REST_Y, 0);
   }
 
-  /** Place the capsule at (x, z) resting on terrain of height `groundY`. */
+  /** Place the capsule at (x, z) resting on a floor at height `groundY`. */
   sync(x: number, z: number, groundY: number): void {
     this.mesh.position.set(x, groundY + REST_Y, z);
   }

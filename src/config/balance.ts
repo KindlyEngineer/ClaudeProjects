@@ -48,29 +48,19 @@ export const GEM_MAGNET_RADIUS = 5; // gems home in once the player is this clos
 export const GEM_MAGNET_SPEED = 14;
 export const XP_BASE_PER_LEVEL = 6; // xp for level 2; grows linearly per level
 
-// ─── Terrain (M2: the verticality differentiator) ───────────────────────────
-export const ARENA_RADIUS = 60; // play space half-extent (XZ); soft wall beyond
-export const PIT_LEVEL = -3; // terrain height at/below this is a lethal pit
+// ─── Tile-based levels (the cover/geometry differentiator) ──────────────────
+// Levels are a grid of tiles assembled from pre-made chunks: a flat walkable
+// floor studded with blocking geometry (walls/cover) and lethal hazard tiles.
+export const CELL = 2; // world units per tile
+export const CHUNK_SIZE = 8; // tiles per chunk edge
+export const CHUNK_GRID = 6; // chunks per arena edge → 48×48 tiles, 96×96 world
 
-// Terrain-aware movement: speed scales with how downhill you're heading.
-export const SLOPE_SPEED_FACTOR = 0.5; // strength of the slope effect
-export const SLOPE_SPEED_MIN = 0.55; // hard uphill floor
-export const SLOPE_SPEED_MAX = 1.5; // downhill ceiling
+export const WALL_HEIGHT = 3.4; // full walls: block movement, projectiles, sight
+export const COVER_HEIGHT = 1.3; // low cover (crates): same blocking, shorter look
 
-// High-ground combat: damage scales with the shooter's height over the target.
-export const HIGH_GROUND_PER_UNIT = 0.12; // +12% damage per unit of height advantage
-export const HIGH_GROUND_MIN = 0.5; // shooting uphill is penalized down to 0.5x
-export const HIGH_GROUND_MAX = 2.0; // capped at 2x from the high ground
-
-// Knockback (shove enemies — ideally off ledges into pits).
+// Knockback — shove enemies into hazards / against walls.
 export const KNOCKBACK_IMPULSE = 7.5;
-export const KNOCKBACK_DECAY = 6; // per-second exponential-ish decay
+export const KNOCKBACK_DECAY = 6; // per-second decay
 
-// Enemies steer to avoid pits (until knockback overrides them).
-export const ENEMY_PIT_LOOKAHEAD = 2.0;
-export const ENEMY_PIT_AVOID = 2.5;
-
-// XP gems roll downhill (low ground = tempting but dangerous farming).
-export const GEM_ROLL_GRAVITY = 16; // downhill acceleration
-export const GEM_ROLL_FRICTION = 2.5;
-export const GEM_ROLL_MAX_SPEED = 9;
+// Enemy pathing: the flow field is rebuilt from the player every N sim ticks.
+export const FLOW_REBUILD_TICKS = 4;

@@ -19,11 +19,10 @@ export class Hud {
     const gems = sim.world.countOf(KIND_GEM);
     const hp = Math.ceil(sim.playerHp);
     this.el.innerHTML = [
-      `VANTAGE · M2`,
+      `VANTAGE`,
       `time ${mmss(sim.time)}`,
-      `lvl ${sim.level}  xp ${sim.xp}/${sim.xpForNextLevel()}`,
+      `lvl ${sim.playerLevel}  xp ${sim.xp}/${sim.xpForNextLevel()}`,
       `hp ${hp}/${PLAYER_MAX_HP}`,
-      `elev ${sim.playerGroundY().toFixed(1)}`,
       `kills ${sim.kills}`,
       `enemies ${enemies}  gems ${gems}`,
     ].join("&nbsp;&nbsp;·&nbsp;&nbsp;");

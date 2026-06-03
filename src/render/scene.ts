@@ -3,9 +3,9 @@ import { cameraPosition } from "./camera";
 import type { ThemeDef } from "../config/runConfig";
 
 // Owns the Three.js renderer, scene, camera and lights. Sky/fog come from the
-// run's theme; the terrain mesh is added by the caller. The camera is a
-// perspective tilt-follow cam that rises and falls with the ground height under
-// the player — so elevation reads through the whole frame.
+// run's theme; the level (floor + walls/cover/hazard) is added by the caller.
+// The camera is a perspective tilt-follow cam tracking the player on the flat
+// arena floor (the `y` arg stays 0 here, but kept for flexibility).
 
 export interface View {
   renderer: THREE.WebGLRenderer;

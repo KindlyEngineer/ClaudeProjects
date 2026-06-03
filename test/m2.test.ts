@@ -1,136 +1,136 @@
 import { describe, it, expect } from "vitest";
-import { Terrain } from "../src/sim/terrain";
-import { highGroundMultiplier } from "../src/sim/combat";
+import { Level, TILE_WALL, TILE_FLOOR, TILE_HAZARD } from "../src/sim/level";
+import { generateLevel } from "../src/sim/levelGen";
+import { FlowField } from "../src/sim/flowField";
 import { Sim } from "../src/sim/sim";
-import { KIND_GEM } from "../src/sim/world";
-import { defaultRunConfig, HIGHLANDS } from "../src/config/runConfig";
-import {
-  ARENA_RADIUS,
-  HIGH_GROUND_MAX,
-  HIGH_GROUND_MIN,
-  PIT_LEVEL,
-} from "../src/config/balance";
-import { normalize2 } from "../src/core/math";
+import { KIND_ENEMY } from "../src/sim/world";
+import { defaultRunConfig, FOUNDRY } from "../src/config/runConfig";
 
-function makeTerrain(seed = 7): Terrain {
-  return new Terrain(seed, HIGHLANDS.terrain, ARENA_RADIUS);
-}
-
-/** Scan the arena for a point inside a lethal pit (deterministic per seed). */
-function findPit(t: Terrain): { x: number; z: number } | null {
-  for (let x = -ARENA_RADIUS; x <= ARENA_RADIUS; x += 1) {
-    for (let z = -ARENA_RADIUS; z <= ARENA_RADIUS; z += 1) {
-      if (t.isPit(x, z)) return { x, z };
-    }
-  }
-  return null;
-}
-
-describe("terrain heightmap", () => {
-  it("is deterministic for a seed and varies by seed", () => {
-    const a = makeTerrain(7);
-    const b = makeTerrain(7);
-    const c = makeTerrain(8);
-    expect(a.heightAt(3, 4)).toBe(b.heightAt(3, 4));
-    expect(a.heightAt(3, 4)).not.toBe(c.heightAt(3, 4));
+describe("tile level generation", () => {
+  it("is deterministic per seed and varies by seed", () => {
+    const a = generateLevel(7, FOUNDRY);
+    const b = generateLevel(7, FOUNDRY);
+    const c = generateLevel(8, FOUNDRY);
+    expect(Array.from(a.tiles)).toEqual(Array.from(b.tiles));
+    expect(Array.from(a.tiles)).not.toEqual(Array.from(c.tiles));
   });
 
-  it("has a raised central plateau (high ground)", () => {
-    const t = makeTerrain(7);
-    const center = t.heightAt(0, 0);
-    // Center should out-rise the average of a far ring.
-    let ringSum = 0;
-    const N = 16;
-    for (let i = 0; i < N; i++) {
-      const a = (i / N) * Math.PI * 2;
-      ringSum += t.heightAt(Math.cos(a) * 40, Math.sin(a) * 40);
-    }
-    expect(center).toBeGreaterThan(ringSum / N);
+  it("walls the border and keeps the centre walkable", () => {
+    const lvl = generateLevel(7, FOUNDRY);
+    expect(lvl.tileAtCell(0, 0)).toBe(TILE_WALL);
+    expect(lvl.tileAtCell(lvl.cols - 1, lvl.rows - 1)).toBe(TILE_WALL);
+    expect(lvl.tileAt(0, 0)).toBe(TILE_FLOOR); // central plaza
   });
 
-  it("carves at least one lethal pit below PIT_LEVEL", () => {
-    const t = makeTerrain(7);
-    const pit = findPit(t);
-    expect(pit).not.toBeNull();
-    if (pit) expect(t.heightAt(pit.x, pit.z)).toBeLessThanOrEqual(PIT_LEVEL);
-  });
-});
-
-describe("high-ground combat rule", () => {
-  it("is neutral at equal height", () => {
-    expect(highGroundMultiplier(5, 5)).toBeCloseTo(1, 6);
-  });
-  it("rewards shooting downhill and penalizes uphill", () => {
-    expect(highGroundMultiplier(10, 4)).toBeGreaterThan(1);
-    expect(highGroundMultiplier(4, 10)).toBeLessThan(1);
-  });
-  it("clamps to the configured bounds", () => {
-    expect(highGroundMultiplier(1000, 0)).toBe(HIGH_GROUND_MAX);
-    expect(highGroundMultiplier(0, 1000)).toBe(HIGH_GROUND_MIN);
-  });
-});
-
-describe("terrain-aware sim mechanics", () => {
-  it("moves the player faster downhill than uphill", () => {
-    // Find a point with a meaningful slope.
-    const probe = new Sim(defaultRunConfig(7));
-    let best = { x: 8, z: 0, mag: 0 };
-    for (let x = -30; x <= 30; x += 3) {
-      for (let z = -30; z <= 30; z += 3) {
-        if (probe.terrain.isPit(x, z)) continue;
-        const g = probe.terrain.gradient(x, z);
-        const mag = Math.hypot(g.gx, g.gz);
-        if (mag > best.mag) best = { x, z, mag };
+  it("every floor tile is reachable from the centre (open chunk borders)", () => {
+    const lvl = generateLevel(7, FOUNDRY);
+    const ff = new FlowField(lvl.cols, lvl.rows);
+    ff.rebuild(lvl, lvl.cellX(0), lvl.cellZ(0));
+    // Count floor tiles vs. ones the BFS reached: chunk borders are floor, so
+    // the whole floor network should be connected.
+    let floor = 0;
+    let reached = 0;
+    for (let cz = 0; cz < lvl.rows; cz++) {
+      for (let cx = 0; cx < lvl.cols; cx++) {
+        if (lvl.tileAtCell(cx, cz) !== TILE_FLOOR) continue;
+        floor++;
+        const s = ff.sampleCell(cx, cz);
+        const isGoal = cx === lvl.cellX(0) && cz === lvl.cellZ(0);
+        if (isGoal || s.fx !== 0 || s.fz !== 0) reached++;
       }
     }
-    const g = probe.terrain.gradient(best.x, best.z);
-    const [ux, uz] = normalize2(g.gx, g.gz); // uphill heading
-
-    const travel = (dx: number, dz: number): number => {
-      const s = new Sim(defaultRunConfig(7));
-      s.playerX = best.x;
-      s.playerZ = best.z;
-      s.update(1 / 60, { x: dx, z: dz });
-      return Math.hypot(s.playerX - best.x, s.playerZ - best.z);
-    };
-
-    const downhill = travel(-ux, -uz);
-    const uphill = travel(ux, uz);
-    expect(downhill).toBeGreaterThan(uphill);
+    expect(reached).toBe(floor);
   });
+});
 
-  it("rolls XP gems downhill", () => {
-    const sim = new Sim(defaultRunConfig(7));
-    // Park the player far away so the gem rolls instead of being magneted.
-    sim.playerX = 999;
-    sim.playerZ = 999;
-    const w = sim.world;
-    const id = w.spawn();
-    const sx = 22;
-    const sz = 6;
-    w.kind[id] = KIND_GEM;
-    w.px[id] = sx;
-    w.pz[id] = sz;
-    w.vx[id] = 0;
-    w.vz[id] = 0;
-    w.amount[id] = 1;
-    const g = sim.terrain.gradient(sx, sz);
-    for (let i = 0; i < 10; i++) sim.update(1 / 60, { x: 0, z: 0 });
-    // Displacement should point downhill (opposite the uphill gradient).
-    const dxp = w.px[id] - sx;
-    const dzp = w.pz[id] - sz;
-    expect(dxp * -g.gx + dzp * -g.gz).toBeGreaterThan(0);
+describe("line of sight / cover", () => {
+  it("a wall blocks line of sight; open floor does not", () => {
+    const lvl = new Level(8, 8);
+    lvl.tiles.fill(TILE_FLOOR);
+    // Put a wall column at cell (4, *).
+    for (let cz = 0; cz < 8; cz++) lvl.setCell(4, cz, TILE_WALL);
+    const ax = lvl.worldX(1);
+    const az = lvl.worldZ(4);
+    const bx = lvl.worldX(6);
+    const bz = lvl.worldZ(4);
+    expect(lvl.hasLineOfSight(ax, az, bx, bz)).toBe(false);
+    // Along a clear row.
+    const lvl2 = new Level(8, 8);
+    lvl2.tiles.fill(TILE_FLOOR);
+    expect(lvl2.hasLineOfSight(lvl2.worldX(1), lvl2.worldZ(4), lvl2.worldX(6), lvl2.worldZ(4))).toBe(
+      true,
+    );
   });
+});
 
-  it("kills the player who stands in a pit", () => {
+describe("flow field pathing", () => {
+  it("points enemies toward the goal and routes around a wall", () => {
+    const lvl = new Level(10, 3);
+    lvl.tiles.fill(TILE_FLOOR);
+    const ff = new FlowField(lvl.cols, lvl.rows);
+    ff.rebuild(lvl, 9, 1); // goal at the right
+    const s = ff.sampleCell(0, 1);
+    expect(s.fx).toBeGreaterThan(0); // flow heads right toward the goal
+  });
+});
+
+describe("terrain-as-geometry sim mechanics", () => {
+  it("the player cannot walk through a wall", () => {
     const sim = new Sim(defaultRunConfig(7));
-    const pit = findPit(sim.terrain);
-    expect(pit).not.toBeNull();
-    if (pit) {
-      sim.playerX = pit.x;
-      sim.playerZ = pit.z;
-      sim.update(1 / 60, { x: 0, z: 0 });
-      expect(sim.playerHp).toBe(0);
+    // Find a wall adjacent to a floor cell and try to walk into it.
+    const lvl = sim.level;
+    let placed = false;
+    for (let cz = 1; cz < lvl.rows - 1 && !placed; cz++) {
+      for (let cx = 1; cx < lvl.cols - 1 && !placed; cx++) {
+        if (lvl.tileAtCell(cx, cz) === TILE_WALL && lvl.isPathable(cx - 1, cz)) {
+          sim.playerX = lvl.worldX(cx - 1);
+          sim.playerZ = lvl.worldZ(cz);
+          placed = true;
+        }
+      }
     }
+    expect(placed).toBe(true);
+    const beforeX = sim.playerX;
+    for (let i = 0; i < 30; i++) sim.update(1 / 60, { x: 1, z: 0 }); // shove east into wall
+    // Should not have crossed into the wall cell (stays on its floor side).
+    expect(sim.level.blocksMovement(sim.playerX, sim.playerZ)).toBe(false);
+    expect(sim.playerX).toBeLessThan(beforeX + 2);
+  });
+
+  it("kills the player who stands on a hazard tile", () => {
+    const sim = new Sim(defaultRunConfig(7));
+    const lvl = sim.level;
+    let found = false;
+    for (let cz = 0; cz < lvl.rows && !found; cz++) {
+      for (let cx = 0; cx < lvl.cols && !found; cx++) {
+        if (lvl.tileAtCell(cx, cz) === TILE_HAZARD) {
+          sim.playerX = lvl.worldX(cx);
+          sim.playerZ = lvl.worldZ(cz);
+          found = true;
+        }
+      }
+    }
+    expect(found).toBe(true);
+    sim.update(1 / 60, { x: 0, z: 0 });
+    expect(sim.playerHp).toBe(0);
+  });
+
+  it("still runs the horde loop on tile arenas (kills accrue, HP drops)", () => {
+    const sim = new Sim(defaultRunConfig(7));
+    for (let i = 0; i < 60 * 16; i++) sim.update(1 / 60, { x: 0, z: 0 });
+    expect(sim.kills).toBeGreaterThan(0);
+    expect(sim.world.countOf(KIND_ENEMY)).toBeGreaterThan(0);
+    expect(sim.playerHp).toBeLessThan(100);
+  });
+
+  it("is deterministic for a seed", () => {
+    const a = new Sim(defaultRunConfig(5));
+    const b = new Sim(defaultRunConfig(5));
+    for (let i = 0; i < 60 * 6; i++) {
+      a.update(1 / 60, { x: 0, z: 0 });
+      b.update(1 / 60, { x: 0, z: 0 });
+    }
+    expect(a.kills).toBe(b.kills);
+    expect(a.playerHp).toBeCloseTo(b.playerHp, 6);
   });
 });

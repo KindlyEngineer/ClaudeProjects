@@ -1,5 +1,5 @@
 import { createView } from "./render/scene";
-import { buildTerrainMesh } from "./render/terrainMesh";
+import { buildLevelMeshes } from "./render/levelMesh";
 import { BillboardLayer } from "./render/billboards";
 import { discTexture, gemTexture } from "./render/textures";
 import { PlayerView } from "./game/player";
@@ -11,12 +11,12 @@ import { lerp } from "./core/math";
 import { Sim, type InputState } from "./sim/sim";
 import { KIND_ENEMY, KIND_GEM, KIND_PROJECTILE } from "./sim/world";
 import { defaultRunConfig, type RunConfig } from "./config/runConfig";
-import { ARENA_RADIUS, FIXED_DT, MAX_ENTITIES } from "./config/balance";
+import { FIXED_DT, MAX_ENTITIES } from "./config/balance";
 
-// M2: terrain becomes real. A run is now parameterized by a RunConfig (seed +
-// theme + character) and started via startRun() — the seam the future
-// main-menu flow (theme → character → gameplay) will drive. The render reads
-// the same heightmap the sim does, so elevation is consistent everywhere.
+// Tile arenas. A run is parameterized by a RunConfig (seed + theme + character)
+// and started via startRun() — the seam the future main-menu flow
+// (theme → character → gameplay) will drive. The render reads the same tile
+// grid the sim collides against, so geometry is consistent everywhere.
 
 export interface RunHandle {
   stop: () => void;
@@ -31,7 +31,7 @@ export function startRun(config: RunConfig, opts: { warp: number; pilot: Pilot }
   const view = createView(container, config.theme);
   const sim = new Sim(config);
 
-  view.scene.add(buildTerrainMesh(sim.terrain, config.theme, ARENA_RADIUS * 2 + 20));
+  view.scene.add(buildLevelMeshes(sim.level, config.theme));
 
   const player = new PlayerView();
   view.scene.add(player.mesh);
@@ -55,16 +55,14 @@ export function startRun(config: RunConfig, opts: { warp: number; pilot: Pilot }
     projectiles.begin(q);
     gems.begin(q);
     const w = sim.world;
-    const t = sim.terrain;
     for (let i = 0; i < w.cap; i++) {
       if (w.alive[i] !== 1) continue;
       const x = w.px[i];
       const z = w.pz[i];
-      const gy = t.heightAt(x, z); // sit each sprite on the ground it's over
       const k = w.kind[i];
-      if (k === KIND_ENEMY) enemies.push(x, gy + 0.75, z);
-      else if (k === KIND_PROJECTILE) projectiles.push(x, gy + 0.9, z);
-      else if (k === KIND_GEM) gems.push(x, gy + 0.35, z);
+      if (k === KIND_ENEMY) enemies.push(x, 0.75, z);
+      else if (k === KIND_PROJECTILE) projectiles.push(x, 0.9, z);
+      else if (k === KIND_GEM) gems.push(x, 0.35, z);
     }
     enemies.end();
     projectiles.end();
@@ -74,9 +72,8 @@ export function startRun(config: RunConfig, opts: { warp: number; pilot: Pilot }
   function draw(alpha: number): void {
     const px = lerp(sim.playerPrevX, sim.playerX, alpha);
     const pz = lerp(sim.playerPrevZ, sim.playerZ, alpha);
-    const gy = sim.terrain.heightAt(px, pz);
-    player.sync(px, pz, gy);
-    view.followCamera(px, gy, pz);
+    player.sync(px, pz, 0);
+    view.followCamera(px, 0, pz);
     syncBillboards();
     hud.update(sim);
     view.render();

@@ -34,37 +34,38 @@ instancing comfortably handles bullet-heaven scales (1k–5k entities) at 60fps.
 
 ## 2. High-level shape
 
+Actual layout as of M2 (the sim is pure, GPU-free, and Vitest-tested):
+
 ```
 src/
-  main.ts            # bootstrap: canvas, renderer, game loop
+  main.ts            # bootstrap + startRun(config) run lifecycle
   core/
     loop.ts          # fixed-timestep update + interpolated render
     rng.ts           # seeded PRNG (deterministic runs/tests)
-    time.ts          # clock, dt, run timer
-  ecs/
-    world.ts         # entity allocation, component stores (SoA)
-    components.ts    # typed-array component definitions
-    systems/         # one file per system (see §4)
-  terrain/
-    heightmap.ts     # generation + sampling (height, slope, normal)
-    bands.ts         # coarse elevation bands for gameplay rules
+    math.ts          # normalize/lerp/clamp helpers
+  sim/               # pure simulation (no THREE)
+    world.ts         # SoA component store + free-list entity pool
+    sim.ts           # systems orchestrator (spawn, AI, weapon, gems, …)
+    level.ts         # tile grid: queries + line-of-sight
+    levelGen.ts      # seeded chunk assembly
+    flowField.ts     # BFS flow-field horde pathing
+    spatialHash.ts   # entity broadphase
   render/
     scene.ts         # three.js scene, camera, lights, fog
+    camera.ts        # pure follow-cam placement math
     billboards.ts    # InstancedMesh sprite layer (enemies/pickups)
-    terrainMesh.ts   # heightmap -> geometry
-    debugDraw.ts     # gizmos for dev/verification
+    levelMesh.ts     # tile grid -> floor + instanced walls/cover/hazards
+    textures.ts      # procedural canvas sprite textures
   game/
-    spawnDirector.ts # wave/difficulty curve
-    weapons.ts       # weapon definitions + firing
-    upgrades.ts      # draft pool + apply
-    player.ts        # input -> intent
-  ui/
-    hud.ts           # health, xp, timer, level-up draft overlay
+    player.ts        # player render view (capsule)
+    input.ts         # keyboard -> move intent
+    autopilot.ts     # deterministic pilots for capture/debug
+  ui/    hud.ts       # DOM HUD (time/level/xp/hp/kills/counts)
   config/
     balance.ts       # all tunable numbers in one place
+    runConfig.ts     # RunConfig / ThemeDef (tileset) / CharacterDef
 test/                # vitest unit tests (pure logic)
-tools/
-  screenshot.ts      # Playwright capture for self-verification
+tools/screenshot.ts  # Playwright capture for self-verification
 ```
 
 ---
@@ -102,39 +103,43 @@ Ground plane convention: **XZ is the play plane, Y is up/height.** Most sim math
 
 Fixed timestep (e.g. 60 Hz sim), render interpolates between sim states.
 
-1. **input** → player intent (move vector, dash).
-2. **playerMove** → apply terrain-aware speed (slope up/down), resolve walls.
-3. **spawnDirector** → emit enemies per difficulty curve & terrain rules.
-4. **enemyAI** → steer toward player (flow toward, avoid walls/pits; flyers ignore).
-5. **physics/integrate** → integrate velocities; sample terrain height for Y;
-   apply knockback; handle ledge falls & pit deaths.
-6. **collisionGrid** → spatial hash on XZ; broadphase enemy↔player, projectile↔enemy.
-7. **weapons** → tick cadences, spawn projectiles/auras, apply high-ground &
-   line-of-sight modifiers.
-8. **damage/death** → resolve hits, hit-flash, drop XP gems on death.
-9. **pickups** → XP gems roll downhill + magnet toward player; apply on contact.
-10. **leveling** → XP thresholds → pause for upgrade draft.
+1. **movePlayer** → integrate input; slide-resolve against solid tiles; hazard = death.
+2. **spawnDirector** → emit enemies on a ramping curve, snapped to floor tiles.
+3. **flowField.rebuild** → BFS from the player's cell every few ticks.
+4. **enemyAI** → sample flow direction (+ separation); slide-resolve; knockback decay;
+   hazard death.
+5. **collisionGrid** → spatial hash on XZ; broadphase projectile↔enemy, contact.
+6. **weapons** → tick cadence; pick nearest enemy **with line of sight**; fire.
+7. **projectiles** → integrate; absorbed by walls/cover; on hit apply damage + knockback.
+8. **death** → drop XP gems on kill.
+9. **pickups** → XP gems magnet toward player; apply on contact.
+10. **leveling** → XP thresholds → level up (upgrade draft in M3).
 11. **render-sync** → push transforms to InstancedMesh; update HUD.
 
-Each system is a pure-ish function `(world, dt) => void` for testability.
+Each system is a method on `Sim` operating on the SoA `World` — pure (no THREE),
+so testable headlessly.
 
 ---
 
-## 5. Terrain model
+## 5. Arena model (tile grid)
 
-- **Generation:** seeded heightmap (value/Perlin-ish noise + a few hand-tuned
-  "feature" stamps: ridges, plateaus, ramps, pits). Deterministic from run seed.
-- **Sampling API:** `heightAt(x,z)`, `slopeAt(x,z)`, `normalAt(x,z)`,
-  `bandAt(x,z)` (coarse elevation tier for gameplay rules & readability).
-- **Gameplay derivations:**
-  - high-ground multiplier = f(attacker.band − target.band)
-  - line-of-sight = raymarch the heightmap between two points
-  - pit = band below threshold → lethal volume
-- **Rendering:** heightmap → `PlaneGeometry` displaced per-vertex, vertex-colored
-  by elevation band; soft fog for depth cueing.
-- **Pathing (MVP):** steer-toward-player + local obstacle avoidance (sample
-  slope/wall ahead and steer around). Upgrade to flow-field later if needed for
-  large hordes around complex terrain.
+- **Generation:** seeded assembly from pre-made 8×8 **chunk templates** (open,
+  pillars, barrier, crates, hazard, elbow). Every chunk keeps its outer ring as
+  floor → adjacent chunks always connect, so the whole arena is traversable with
+  no runtime path-carving. The four central chunks are forced open (spawn plaza);
+  the grid border is walled. Deterministic from the run seed. (`sim/levelGen.ts`)
+- **Tiles:** `FLOOR` (walkable), `WALL`/`COVER` (block movement + projectiles +
+  sight; differ only in render height), `HAZARD` (walkable but instant-death).
+- **Query API (`sim/level.ts`):** `blocksMovement`, `blocksProjectile`,
+  `isHazard`, `isPathable` (floor only, for the flow field), `hasLineOfSight`
+  (sampled segment test), plus cell↔world coordinate helpers.
+- **Pathing:** grid **flow field** (`sim/flowField.ts`) — one BFS from the
+  player's cell across floor tiles (8-connected, no corner-cutting) yields a
+  per-cell direction vector; enemies sample it and flow around walls/through gaps
+  and avoid hazards. Rebuilt every `FLOW_REBUILD_TICKS`; scales to thousands of
+  enemies for one BFS.
+- **Rendering:** flat floor plane + instanced boxes for walls/cover (height →
+  2.5D depth) + emissive hazard tiles (`render/levelMesh.ts`).
 
 ---
 
@@ -147,7 +152,7 @@ Each system is a pure-ish function `(world, dt) => void` for testability.
   rise/fall with terrain and sort by depth. This is the trick that gives a "3D"
   feel with 2D art and no modeling pipeline.
 - **Terrain/props:** real low-poly 3D meshes.
-- **Depth & readability:** fog, elevation tinting, ground-contact shadows
+- **Depth & readability:** fog, shadow-casting walls/cover, ground-contact shadows
   (cheap blob shadows) so floating billboards read as grounded.
 - **Scale target:** 1k enemies MVP, design headroom to 3–5k via instancing +
   frustum/distance culling.
@@ -165,8 +170,8 @@ This is core to the "how much can Claude do solo" goal.
   is reproducible — good for visual regression and for me to reason about state.
 - **Debug overlay / state dump:** a dev flag renders gizmos (entity counts, bands,
   collision grid) and can dump JSON game state for assertion in tests.
-- **Vitest** covers pure logic (terrain sampling, high-ground math, collision,
-  leveling curves, RNG) with no browser.
+- **Vitest** covers pure logic (level gen, line-of-sight, flow-field pathing,
+  collision, leveling curves, RNG) with no browser.
 - Loop per change: `typecheck → vitest → build → screenshot → inspect`.
 
 > **Browser sourcing:** the harness prefers a standard Playwright/system
@@ -215,25 +220,33 @@ This is core to the "how much can Claude do solo" goal.
   (7→27), level 1→3, and projectiles + gems on screen. Deterministic `?seed`,
   `?warp`, `?pilot` URL params drive reproducible captures.
 
-- **M2 — Terrain becomes real** ✅ *(done)*
-  Continuous seeded heightmap (`src/sim/terrain.ts`: fractal value-noise +
-  handcrafted POIs — central plateau + lethal pits) with `heightAt`/`gradient`/
-  `isPit`; terrain-aware movement (downhill faster, uphill slower); high-ground
-  damage rule (`src/sim/combat.ts`); pits = death (player + enemies); knockback
-  shoving enemies toward ledges; XP gems roll downhill; enemies steer to avoid
-  pits. Render: displaced, elevation-vertex-colored terrain mesh
-  (`src/render/terrainMesh.ts`) + a camera that rises/falls with the ground; HUD
-  shows live elevation. Run config seam landed too (see below). Verified: 29 unit
-  tests (terrain determinism, plateau, lethal pit, high-ground math, downhill
-  movement + gems, pit death) + 4 deterministic screenshots showing the plateau,
-  pits/craters, and a horde pathing across the relief.
+- **M2 — Tile arenas** ✅ *(done; pivoted)*
+  > **Pivot:** M2 first shipped a continuous-heightmap *verticality* differentiator
+  > (high-ground damage, slopes, pits). We then reassessed and replaced it with
+  > **tile-based arenas + blocking geometry** (a more open SYNTHETIK 2). The
+  > heightmap code (`sim/terrain.ts`, `sim/combat.ts`, `render/terrainMesh.ts`) was
+  > retired. The ECS, weapon/gem/leveling loop, billboards, screenshot harness and
+  > the run-config seam carried straight over.
 
-  **Run-config seam (groundwork for the menu flow):** a run is now parameterized
-  by `RunConfig { seed, theme, character }` (`src/config/runConfig.ts`) and
-  started via `startRun(config)` / handle `.stop()` in `main.ts` — no longer a
-  run-on-import side effect. Terrain/sky/palette come from the theme; player
-  stats from the character. Exactly one default theme (Highlands) + character
-  (Drifter) for now; the menu shell (below) will build the config.
+  The arena is a tile grid (`src/sim/level.ts`: floor / wall / cover / hazard with
+  `blocksMovement`/`blocksProjectile`/`hasLineOfSight`/`isHazard`), **assembled
+  from pre-made 8×8 chunks** with open borders for guaranteed connectivity
+  (`src/sim/levelGen.ts`). Geometry is the mechanic: wall collision (slide along
+  walls), projectiles absorbed by walls/cover, the auto-weapon won't fire through
+  cover (LOS-gated targeting), hazard tiles = instant death, knockback shoves
+  enemies into hazards. The horde navigates via a **grid flow-field**
+  (`src/sim/flowField.ts`: one BFS from the player, routes around walls/through
+  gaps, avoids hazards). Render: flat floor + instanced wall/cover boxes + glowing
+  hazard tiles (`src/render/levelMesh.ts`). Verified: 29 unit tests (level
+  determinism, border walls, full-floor connectivity, LOS/cover, flow direction,
+  wall collision, hazard death, horde loop, determinism) + 3 deterministic
+  screenshots showing arenas, geometry, hazards and a 41-enemy horde.
+
+  **Run-config seam (groundwork for the menu flow):** a run is parameterized by
+  `RunConfig { seed, theme, character }` (`src/config/runConfig.ts`) and started
+  via `startRun(config)` / handle `.stop()` in `main.ts` — no run-on-import side
+  effect. **Theme = tileset + palette** (one default, Foundry); character = stats
+  (one default, Drifter). The menu shell (M4.5) builds the config.
 
 - **M3 — The build loop**
   Level-up upgrade draft, 4–6 weapons (incl. downhill/lobber/knocker archetypes),
