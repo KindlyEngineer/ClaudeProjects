@@ -10,21 +10,24 @@ Default to **Trusted** (package registries + GitHub + cloud SDKs). Switch to
 Use **None** for confidential review with no outbound traffic.
 
 ### Headless browser for the screenshot harness
-The game's self-verification harness (`tools/screenshot.ts`) drives a headless
-Chromium, downloaded by Playwright. Its CDN is **not** part of the default
-allowlist, so under a restrictive **Custom** policy the install fails with
-`403 Host not in allowlist`. To enable in-session screenshots, add these hosts
-to the **Custom** allowlist (or use **Trusted** if it already covers them):
+The game's self-verification harness (`tools/screenshot.ts`) needs a headless
+Chromium. **No environment change is required:** it falls back to
+`@sparticuz/chromium`, a Chromium build delivered through the **npm registry**
+(already allowlisted), so screenshots work even under a restrictive **Custom**
+policy. Just run `npm run screenshot` → `tools/shots/latest.png`.
+
+Optionally, to use the **full upstream Chromium** (e.g. exact-pixel parity with
+Playwright's bundled build) instead of the npm fallback, allowlist its CDN —
+under **Custom**, add (or use **Trusted** if it already covers them):
 
 ```
 cdn.playwright.dev                      # Playwright browser binaries (primary)
 playwright.download.prss.microsoft.com  # Microsoft mirror (fallback)
 ```
 
-Once allowed, the browser is fetched by either the SessionStart hook
-(`scripts/install_deps.sh`) or — preferably, for caching — the setup script
-below. To pin a custom mirror, set `PLAYWRIGHT_DOWNLOAD_HOST` (honored by the
-install step). Verify with `npm run screenshot` (writes `tools/shots/latest.png`).
+Then `npx playwright install chromium` (the SessionStart hook / setup script
+below already attempts this; it no-ops harmlessly when the CDN is blocked).
+`PLAYWRIGHT_DOWNLOAD_HOST` can pin a custom mirror.
 
 ## Setup script
 Runs once as root before Claude launches; result is cached (~7 days) so installs

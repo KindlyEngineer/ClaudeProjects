@@ -2,14 +2,44 @@
 // build with `vite preview`, drives a headless Chromium (WebGL via SwiftShader),
 // waits for the game to render, and captures a PNG. Lets Claude *see* its output.
 //
+// Browser sourcing is resilient to restrictive network policies: it prefers a
+// standard Playwright/system Chromium, but falls back to @sparticuz/chromium —
+// a Chromium build delivered through the npm registry, so it needs no access to
+// the Playwright CDN (which some network allowlists block).
+//
 // Usage: npm run screenshot   (runs `vite build` first, then this)
 
 import { spawn } from "node:child_process";
-import { chromium } from "playwright";
+import type { Browser } from "playwright-core";
 import { setTimeout as sleep } from "node:timers/promises";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+// WebGL-enabling flags for headless software rendering.
+const GL_ARGS = [
+  "--use-gl=angle",
+  "--use-angle=swiftshader",
+  "--enable-unsafe-swiftshader",
+  "--ignore-gpu-blocklist",
+];
+
+/** Launch Chromium, preferring a normal Playwright browser, else the npm one. */
+async function launchBrowser(): Promise<Browser> {
+  try {
+    const { chromium } = await import("playwright");
+    const b = await chromium.launch({ args: GL_ARGS });
+    console.log("browser: playwright chromium");
+    return b;
+  } catch (err) {
+    console.log(`browser: falling back to @sparticuz/chromium (${(err as Error).message.split("\n")[0]})`);
+    const sparticuz = (await import("@sparticuz/chromium")).default;
+    sparticuz.setGraphicsMode = true; // enable WebGL via swiftshader
+    const { chromium } = await import("playwright-core");
+    const executablePath = await sparticuz.executablePath();
+    return chromium.launch({ executablePath, args: [...sparticuz.args, ...GL_ARGS] });
+  }
+}
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 4173;
@@ -43,14 +73,7 @@ async function main(): Promise<number> {
   try {
     await waitForServer(URL);
 
-    const browser = await chromium.launch({
-      args: [
-        "--use-gl=angle",
-        "--use-angle=swiftshader",
-        "--enable-unsafe-swiftshader",
-        "--ignore-gpu-blocklist",
-      ],
-    });
+    const browser = await launchBrowser();
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     page.on("console", (m) => {
       if (m.type() === "error") errors.push(`console: ${m.text()}`);

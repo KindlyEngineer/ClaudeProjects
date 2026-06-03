@@ -169,14 +169,15 @@ This is core to the "how much can Claude do solo" goal.
   leveling curves, RNG) with no browser.
 - Loop per change: `typecheck → vitest → build → screenshot → inspect`.
 
-> **Network note:** the screenshot step needs the Playwright browser CDN
-> (`cdn.playwright.dev`) or a pre-provisioned Chromium. Under a restrictive
-> network *allowlist* (as in some cloud sessions) that host may be blocked
-> (`403 Host not in allowlist`), so the visual step is skipped and verification
-> falls back to `typecheck → vitest → build`. Because Three.js geometry/mesh
-> construction needs **no** GPU, we keep as much logic as possible (movement,
-> camera math, terrain sampling, collision, leveling) in Vitest where it runs
-> headlessly regardless of network policy.
+> **Browser sourcing:** the harness prefers a standard Playwright/system
+> Chromium, but falls back to `@sparticuz/chromium` — a Chromium build delivered
+> through the **npm registry** — so the screenshot step works even under a
+> restrictive network *allowlist* that blocks the Playwright CDN
+> (`cdn.playwright.dev` → `403 Host not in allowlist`). WebGL renders via
+> SwiftShader (`setGraphicsMode`/`--use-angle=swiftshader`). Regardless, we keep
+> as much logic as possible (movement, camera math, terrain sampling, collision,
+> leveling) in Vitest, since Three.js geometry/mesh construction needs **no** GPU
+> and runs headlessly anywhere.
 
 ---
 
@@ -200,8 +201,9 @@ This is core to the "how much can Claude do solo" goal.
   follow-camera, lit ground + reference grid, WASD-controllable capsule,
   Playwright screenshot tool, Vitest wired. Verified headlessly: typecheck clean,
   13 unit tests pass (RNG determinism, vector math, player integration, render
-  interpolation, follow-cam placement), production build succeeds. Browser
-  screenshot deferred — CDN blocked by this session's network allowlist.
+  interpolation, follow-cam placement), production build succeeds, and the
+  in-session **screenshot renders** (capsule + cast shadow under the tilt cam)
+  via the npm-delivered Chromium fallback — no network-policy change needed.
 
 - **M1 — Horde slice**
   SoA ECS, one billboarded chaser enemy type, spawn director, spatial-hash

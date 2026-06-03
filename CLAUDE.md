@@ -40,12 +40,13 @@ for the full design doc, architecture, and milestone roadmap (M0–M5).
 - Screenshot-verify: `npm run screenshot` → `tools/shots/latest.png`
 
 ## Notes for cloud sessions
-- The screenshot harness needs Playwright's Chromium, whose CDN
-  (`cdn.playwright.dev`) is NOT in the default network allowlist. Under a
-  restrictive **Custom** policy it 403s; allowlist that host (see
-  `docs/cloud-environment.md`) to enable in-session screenshots. Without it,
-  verification falls back to `typecheck → test → build` (still meaningful — the
-  sim spine is unit-tested without a GPU).
+- Screenshot self-verification works **regardless of network policy**. The
+  harness (`npm run screenshot` → `tools/shots/latest.png`) prefers a standard
+  Playwright/system Chromium, but falls back to `@sparticuz/chromium` — a
+  Chromium delivered through the npm registry — so it needs no access to the
+  often-blocked Playwright CDN (`cdn.playwright.dev`). Allowlisting that CDN
+  (see `docs/cloud-environment.md`) is optional and just swaps in the full
+  upstream Chromium.
 - `gh` CLI is NOT pre-installed; the environment setup script installs it (see
   `docs/cloud-environment.md`).
 - No secrets store exists — anything sensitive goes in environment variables
