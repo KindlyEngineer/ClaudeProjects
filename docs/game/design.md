@@ -130,9 +130,9 @@ knockback shoves the swarm in, but don't get cornered in a dead-end.
 | System | MVP | Later |
 |---|---|---|
 | Movement | slide along walls, hazards lethal | dash, destructible cover |
-| Weapons | 1 LOS-gated auto-weapon | 6–8 weapons, evolutions, weapon classes |
-| Upgrades | level-up draft of stat/weapon cards | passives, synergy sets, banish/reroll |
-| Enemies | 1 flow-field chaser | flyers, tanks, splitters, ranged, elites, bosses |
+| Weapons | 5 archetypes (gun/lance/lobber/orbit/knocker), each leveled | evolutions, weapon classes, more per theme |
+| Upgrades | level-up draft of weapon + stat-passive cards | synergy sets, banish/reroll, evolutions |
+| Enemies | flow-field chaser + a timed boss; HP/speed ramp | flyers, tanks, splitters, ranged, elites, more bosses |
 | Arena | tile grid (walls/cover/hazard) from chunks | more chunk sets, biomes, destructible, ricochet |
 | Pickups | XP gems (magnet) | gold, chests, magnets, health, bombs |
 | Meta | none | unlock characters/weapons, persistent upgrades |
@@ -197,10 +197,19 @@ Resolved so far:
 - **Menu flow:** title → theme selection → character selection → gameplay. The
   `RunConfig`/`startRun` seam is in; theme = tileset. Shell is M4.5.
 
+- **Weapon archetypes:** five at MVP, each tied to geometry — gun (LOS-gated),
+  lance (piercing lane), lobber (arcs over walls), orbit blades (cover-agnostic),
+  knocker (shove into hazards). Leveled via the draft. ✅
+- **Upgrade draft:** level-up offers 3 cards (new weapon / weapon level / stat
+  passive), rolled from the run seed; modal pick in live play. ✅
+- **Difficulty + bosses:** enemy HP & speed ramp over time; a boss every 2.5 min
+  (scales, scatters a gem burst). ✅
+
 Still open:
 - Aim model: pure auto-target (VS) for now; revisit an aimed primary later.
 - Half-cover (blocks fire but not movement) vs current hard-cover-only.
 - Whether to add ricochet-off-cover (a SYNTHETIK signature).
-- Difficulty-curve ramp and where bosses land (M3).
+- Weapon **evolutions** and synergy sets (the next layer of the build loop).
+- A proper run-end (death/results) screen — currently the sim runs past 0 HP.
 
 See `architecture.md` for the technical plan, data layout, and milestones.

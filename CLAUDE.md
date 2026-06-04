@@ -4,11 +4,14 @@ VANTAGE is a 2.5D bullet-heaven (Vampire Survivors / Megabonk lineage) built
 from scratch in TypeScript + Three.js. Its differentiator: **the arena is real
 tactical space** — tile-based levels of walls, cover and hazards that block
 movement, projectiles and line-of-sight and funnel the horde (a more open
-SYNTHETIK 2). Currently at **M2** (tile arenas: seeded chunk assembly, wall
-collision, LOS-gated weapon, hazard kill-zones, flow-field horde pathing — on
-the M1 horde loop). A `RunConfig {seed,theme,character}` seam + `startRun()` is
-in place for the future menu flow (theme = tileset). See `docs/game/` for the
-design doc, architecture, and roadmap.
+SYNTHETIK 2). Currently at **M3** (the build loop: 5 geometry-exploiting weapon
+archetypes — gun, piercing lance, wall-arcing lobber, orbit blades, knockback
+knocker — each leveled via a level-up upgrade draft of weapon/passive cards,
+plus a difficulty ramp and a timed boss — on the M2 tile arenas: seeded chunk
+assembly, wall collision, LOS-gated fire, hazard kill-zones, flow-field horde
+pathing). A `RunConfig {seed,theme,character}` seam + `startRun()` is in place
+for the future menu flow (theme = tileset). See `docs/game/` for the design
+doc, architecture, and roadmap.
 
 > Note: an earlier M2 explored a continuous-heightmap *verticality* mechanic;
 > it was reassessed and replaced by the tile/geometry approach above. The name

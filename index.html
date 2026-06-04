@@ -13,11 +13,37 @@
         color: #9fb4ff; opacity: 0.85; pointer-events: none; user-select: none;
         text-shadow: 0 1px 2px #000;
       }
+      #draft {
+        position: fixed; inset: 0; display: none;
+        align-items: center; justify-content: center; gap: 18px;
+        background: rgba(7, 9, 14, 0.72); backdrop-filter: blur(2px);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; z-index: 10;
+      }
+      #draft.show { display: flex; }
+      #draft .title {
+        position: absolute; top: 18%; width: 100%; text-align: center;
+        color: #cfe0ff; font-size: 20px; letter-spacing: 0.18em; text-shadow: 0 1px 3px #000;
+      }
+      #draft .card {
+        width: 220px; min-height: 150px; padding: 18px 16px;
+        background: linear-gradient(180deg, #1a2030, #11151f);
+        border: 1px solid #2c3650; border-radius: 10px; cursor: pointer;
+        color: #dfe7ff; box-shadow: 0 8px 28px rgba(0,0,0,0.45); transition: transform .08s, border-color .08s;
+      }
+      #draft .card:hover, #draft .card.sel { transform: translateY(-6px); border-color: #6ea0ff; }
+      #draft .card .key { color: #6ea0ff; font-size: 12px; letter-spacing: .1em; }
+      #draft .card .name { font-size: 17px; margin: 10px 0 6px; }
+      #draft .card .tag {
+        display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 5px;
+        background: #233152; color: #8fb0ff; margin-bottom: 10px;
+      }
+      #draft .card .blurb { font-size: 12px; line-height: 1.5; color: #9fb0cc; }
     </style>
   </head>
   <body>
     <div id="app"></div>
     <div id="hud">VANTAGE · M0 — WASD / arrows to move</div>
+    <div id="draft"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

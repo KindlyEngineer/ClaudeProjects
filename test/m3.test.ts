@@ -13,6 +13,7 @@ import {
   W_KNOCKER,
   W_LOB,
   W_ORBIT,
+  type WeaponId,
 } from "../src/sim/weapons";
 import { rollUpgrades, type DraftState } from "../src/sim/upgrades";
 
@@ -124,7 +125,7 @@ describe("the build loop (level-up draft in the running sim)", () => {
 describe("geometry-exploiting weapon archetypes", () => {
   it("the lobber fires at an enemy with no line of sight; the gun does not", () => {
     // Build a wall barrier between the player and a planted target.
-    const setup = (weapon: number) => {
+    const setup = (weapon: WeaponId) => {
       const sim = new Sim(defaultRunConfig(1));
       sim.autoDraft = false;
       const lvl = sim.level;

@@ -25,6 +25,25 @@ export function discTexture(inner: string, outer: string): THREE.CanvasTexture {
   return tex;
 }
 
+/** A bright ring/blade glyph for orbiting aura weapons. */
+export function bladeTexture(color: string): THREE.CanvasTexture {
+  const { c, ctx } = canvas();
+  const glow = ctx.createRadialGradient(32, 32, 1, 32, 32, 30);
+  glow.addColorStop(0, "rgba(255,255,255,0.95)");
+  glow.addColorStop(0.4, color);
+  glow.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(32, 32, 16, 0, Math.PI * 2);
+  ctx.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /** A bright four-point gem glyph for XP pickups. */
 export function gemTexture(color: string): THREE.CanvasTexture {
   const { c, ctx } = canvas();

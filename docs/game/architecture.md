@@ -50,6 +50,8 @@ src/
     levelGen.ts      # seeded chunk assembly
     flowField.ts     # BFS flow-field horde pathing
     spatialHash.ts   # entity broadphase
+    weapons.ts       # weapon archetypes + per-level stat scaling
+    upgrades.ts      # level-up draft: option rolling + passive defs
   render/
     scene.ts         # three.js scene, camera, lights, fog
     camera.ts        # pure follow-cam placement math
@@ -60,7 +62,9 @@ src/
     player.ts        # player render view (capsule)
     input.ts         # keyboard -> move intent
     autopilot.ts     # deterministic pilots for capture/debug
-  ui/    hud.ts       # DOM HUD (time/level/xp/hp/kills/counts)
+  ui/
+    hud.ts           # DOM HUD (time/level/xp/hp/kills/loadout/boss bar)
+    draft.ts         # level-up draft modal (card picker)
   config/
     balance.ts       # all tunable numbers in one place
     runConfig.ts     # RunConfig / ThemeDef (tileset) / CharacterDef
@@ -109,15 +113,23 @@ Fixed timestep (e.g. 60 Hz sim), render interpolates between sim states.
 4. **enemyAI** → sample flow direction (+ separation); slide-resolve; knockback decay;
    hazard death.
 5. **collisionGrid** → spatial hash on XZ; broadphase projectile↔enemy, contact.
-6. **weapons** → tick cadence; pick nearest enemy **with line of sight**; fire.
-7. **projectiles** → integrate; absorbed by walls/cover; on hit apply damage + knockback.
-8. **death** → drop XP gems on kill.
-9. **pickups** → XP gems magnet toward player; apply on contact.
-10. **leveling** → XP thresholds → level up (upgrade draft in M3).
-11. **render-sync** → push transforms to InstancedMesh; update HUD.
+6. **weapons** → each owned weapon ticks its own cadence; targets the nearest
+   enemy (LOS-gated, except the lobber which arcs over walls); fires.
+7. **orbiters** → reposition aura blades around the player; damage overlapped enemies.
+8. **projectiles** → integrate; non-lobbers absorbed by walls/cover; on hit apply
+   damage + knockback, pierce through up to N enemies, or explode for area damage.
+9. **death** → drop XP gems on kill (a burst for bosses).
+10. **pickups** → XP gems magnet toward player; apply on contact.
+11. **leveling** → XP thresholds → level up → roll an upgrade draft (auto-resolved
+    headlessly, or a modal card pick in live play).
+12. **contactDamage** → strongest enemy in contact drains player HP.
+13. **render-sync** → push transforms to InstancedMesh; update HUD. *(in `main.ts`,
+    not the sim — the sim stays pure/headless.)*
 
-Each system is a method on `Sim` operating on the SoA `World` — pure (no THREE),
-so testable headlessly.
+Each sim system is a method on `Sim` operating on the SoA `World` — pure (no
+THREE), so testable headlessly. The build loop adds a draft seam: `applyLeveling`
+queues option-sets that either auto-resolve (tests/warp/pilots) or pause for
+`chooseUpgrade()` from the UI.
 
 ---
 
@@ -248,10 +260,23 @@ This is core to the "how much can Claude do solo" goal.
   effect. **Theme = tileset + palette** (one default, Foundry); character = stats
   (one default, Drifter). The menu shell (M4.5) builds the config.
 
-- **M3 — The build loop**
-  Level-up upgrade draft, 4–6 weapons (incl. downhill/lobber/knocker archetypes),
-  weapon leveling, difficulty curve + first boss. Verify: a full ~10-min run is
-  survivable and the draft meaningfully changes the run.
+- **M3 — The build loop** ✅ *(done)*
+  Five weapon archetypes, each exploiting the arena geometry a different way
+  (`src/sim/weapons.ts`): **Gun** (LOS-gated single shot, the starter), **Lance**
+  (piercing bolt — skewers a chokepoint), **Lobber** (arcs *over* walls, area
+  damage — counters cover), **Orbit Blades** (cover-agnostic aura, projectile-
+  free), **Knocker** (heavy knockback — shoves the swarm into hazards). Each
+  levels through a **level-up upgrade draft** (`src/sim/upgrades.ts`): every
+  level offers `DRAFT_OPTIONS` cards — a new weapon, a weapon level-up, or a stat
+  passive (damage / fire-rate / move-speed / max-HP / magnet) — rolled
+  deterministically from the run RNG. The draft auto-resolves for headless/warp/
+  pilot runs and pauses for a modal card pick in live play (`src/ui/draft.ts`).
+  A **difficulty curve** ramps enemy HP and speed over time, and a **timed boss**
+  arrives every 2.5 min (big, tough, scatters a burst of XP gems). Verified: 26
+  new sim tests (weapon stat scaling, deterministic draft rolls, the live build
+  loop, each archetype's geometry behaviour, boss spawning/HP ramp, end-to-end
+  determinism — 44 total) + deterministic screenshots of an evolved loadout with
+  orbiters, the level-up draft modal, and a boss on the field with its HUD bar.
 
 - **M4 — Feel & content pass**
   Juice (hit-stop, shake, number pops, death fx), more enemy types incl. flyers,
