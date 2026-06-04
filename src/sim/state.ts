@@ -105,3 +105,24 @@ export function unitAt(state: GameState, h: Hex): UnitInstance | undefined {
 export function livingUnits(state: GameState, side?: Side): UnitInstance[] {
   return state.units.filter((u) => u.structure > 0 && (side === undefined || u.side === side));
 }
+
+// ── Unit status (crit effects) — read by movement, firing and the AI later. ──
+export function isDestroyed(u: UnitInstance): boolean {
+  return u.structure <= 0;
+}
+export function hasCrit(u: UnitInstance, c: string): boolean {
+  return u.crits.includes(c);
+}
+/** A mobility-killed (or destroyed) unit cannot move. */
+export function canMove(u: UnitInstance): boolean {
+  return !isDestroyed(u) && !hasCrit(u, "mobility");
+}
+/** A weapon-killed (or destroyed) unit cannot fire. */
+export function canFire(u: UnitInstance): boolean {
+  return !isDestroyed(u) && !hasCrit(u, "weapon");
+}
+/** Sensors crit halves sight range. */
+export function effectiveVision(u: UnitInstance): number {
+  const base = unitType(u.typeId).vision;
+  return hasCrit(u, "sensors") ? Math.max(1, Math.floor(base / 2)) : base;
+}

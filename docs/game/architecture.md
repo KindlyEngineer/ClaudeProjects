@@ -42,9 +42,17 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
   `GameState`, and the 2.5D heightmap render (continuous surface, hex grid,
   facing-aware unit markers, objective zone). Verified: 17 unit tests + a board
   screenshot showing both forces, facings, terrain and the seize zone.
-- **Slice 2 — Uniform combat model**
-  Facing armour + structure + 4-state crit table + suppression, data-driven,
-  seeded rolls with full roll-logging. Unit-tested in isolation.
+- **Slice 2 — Uniform combat model** ✅
+  One model for every unit (`sim/combat.ts`): to-hit (cover + attacker-
+  suppression mods) → facing-armour penetration (`pen ≥ arc armour`) → structure
+  damage → a possible crit from the shared 4-state table (`data/crits.ts`:
+  mobility / weapon / sensors / shaken) → suppression that breaks the crew into
+  "shaken". All randomness flows through a seeded, logged dice (`sim/dice.ts`,
+  `mulberry32Step` over `GameState.rngState`), so attacks are deterministic and
+  every roll is auditable. Crit effects exposed as `canMove`/`canFire`/
+  `effectiveVision` for later slices. Tuning in `data/rules.ts`. Verified: 10
+  unit tests (facing arcs, front-bounces/rear-penetrates end-to-end, ammo use,
+  determinism + roll-logging, suppression break, range/cover) — 27 total.
 - **Slice 3 — Turns, actions & logistics**
   Phased initiative + reserve; the shared player-action API; finite ammo +
   fuel/MP; adjacent resupply; supply-line tracing with dry-out penalties.
