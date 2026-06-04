@@ -29,7 +29,8 @@ export const RULES = {
     fuelLow: 0.25,
     structLow: 0.4,
     needTrigger: 0.34, // sustainment need above which the stance becomes "resupply"
-    wObjective: 3, // pull toward the objective
+    wObjective: 3, // pull toward the (nearest) objective-zone hex
+    wSeize: 60, // taking an open zone hex wins — it dominates everything else
     wSupply: 4, // pull toward supply, scaled by need
     wThreat: 1.2, // push away from exposure
     wAttack: 5, // pull toward a shot on a degraded enemy

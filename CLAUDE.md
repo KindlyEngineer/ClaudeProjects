@@ -33,10 +33,19 @@ by an autonomous main effort.
 - `src/`
   - `core/` — `rng.ts` (seeded mulberry32), `math.ts`
   - `sim/` — pure deterministic simulation (no THREE):
-    - `hex.ts` — hex geometry: coords, distance, line, facing → armour arcs
-    - `state.ts` — `GameState`, unit instances, `createGame()` from a map
-    - *(coming: `combat.ts`, `logistics.ts`, `vision.ts`, `commander.ts`,
-      `turn.ts`, `actions.ts`)*
+    - `hex.ts` — geometry: coords, distance, line, facing → armour arcs
+    - `state.ts` — `GameState`, unit instances, `createGame()`; status helpers
+    - `dice.ts` — seeded, logged rolls (`GameState.rngState` + `rollLog`)
+    - `combat.ts` — the one uniform model: facing armour → structure → crits + suppression
+    - `turn.ts` — phased initiative (recon→fires→maneuver + reserve) + upkeep
+    - `actions.ts` — shared action API: move / fire / resupply (UI + AI + scenarios)
+    - `logistics.ts` — finite ammo/fuel, resupply, supply-line tracing + dry-out
+    - `vision.ts` — per-side sight (LOS-gated); forward-observer targeting
+    - `pathing.ts` — Dijkstra reachability for the AI
+    - `commander.ts` — the inspectable utility AI for the mechs + intent string
+    - `objective.ts` — Seize evaluation + win/loss
+    - `match.ts` — headless match runner + support policies (self-play seam)
+    - `aiutil.ts` — shared scripted-unit helpers · `demo.ts` — capture skirmish
   - `data/` — all content as data tables: `types.ts` (schemas), `terrain.ts`,
     `units.ts`, `maps/` (handcrafted maps). Add a row to add content.
   - `render/` — reads sim state only: `view.ts` (scene/camera), `board.ts`

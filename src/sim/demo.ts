@@ -1,8 +1,8 @@
-import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
-import { attackUnit, canAttack, moveUnit, movePoints, resupplyUnit } from "./actions";
+import { resupplyUnit } from "./actions";
+import { fireBest, nearestEnemyHex, stepToward } from "./aiutil";
 import { commandMechs } from "./commander";
-import { hexDistance, hexKey, neighbors, type Hex } from "./hex";
+import { hexDistance, type Hex } from "./hex";
 import { livingUnits, type GameState, type UnitInstance } from "./state";
 import { beginTurn, nextPhase } from "./turn";
 
@@ -10,63 +10,6 @@ import { beginTurn, nextPhase } from "./turn";
 // driven by the real commander AI (Slice 4); only the support/logistics units
 // are scripted here (a stand-in for the player) — recon scouts forward, artillery
 // shapes, supply follows. Drives the sim only through the shared action API.
-
-function passableUnoccupied(state: GameState, h: Hex, moverId: number): boolean {
-  const cell = state.cells.get(hexKey(h));
-  if (!cell || !Number.isFinite(terrain(cell.terrain).moveCost)) return false;
-  return !livingUnits(state).some((u) => u.id !== moverId && u.hex.q === h.q && u.hex.r === h.r);
-}
-
-/** Greedily step toward `target` over open hexes, within MP/fuel budget. */
-function stepToward(state: GameState, unit: UnitInstance, target: Hex, maxSteps: number): void {
-  const budget = Math.min(maxSteps, movePoints(unit), Math.floor(unit.fuel));
-  const path: Hex[] = [];
-  let cur = unit.hex;
-  for (let i = 0; i < budget; i++) {
-    let best: Hex | undefined;
-    let bestD = hexDistance(cur, target);
-    for (const n of neighbors(cur)) {
-      if (!passableUnoccupied(state, n, unit.id)) continue;
-      const d = hexDistance(n, target);
-      if (d < bestD) {
-        bestD = d;
-        best = n;
-      }
-    }
-    if (!best) break;
-    path.push(best);
-    cur = best;
-  }
-  if (path.length) moveUnit(state, unit, path);
-}
-
-function fireBest(state: GameState, unit: UnitInstance): void {
-  let target: UnitInstance | undefined;
-  let bestD = Infinity;
-  for (const e of livingUnits(state)) {
-    if (e.side === unit.side || !canAttack(state, unit, 0, e)) continue;
-    const d = hexDistance(unit.hex, e.hex);
-    if (d < bestD) {
-      bestD = d;
-      target = e;
-    }
-  }
-  if (target) attackUnit(state, unit, 0, target);
-}
-
-function nearestEnemyHex(state: GameState, unit: UnitInstance): Hex | undefined {
-  let best: Hex | undefined;
-  let bestD = Infinity;
-  for (const e of livingUnits(state)) {
-    if (e.side === unit.side) continue;
-    const d = hexDistance(unit.hex, e.hex);
-    if (d < bestD) {
-      bestD = d;
-      best = e.hex;
-    }
-  }
-  return best;
-}
 
 function actUnit(state: GameState, u: UnitInstance, objectiveHex: Hex): void {
   const cls = unitType(u.typeId).cls;

@@ -21,12 +21,16 @@ src/
   sim/    (pure, no THREE)
     hex.ts        coords, distance, line, facing → front/side/rear arcs   ✅
     state.ts      GameState, unit instances, createGame()                 ✅
-    combat.ts     uniform model: facing armour + structure + 4-state crits  (slice 2)
-    logistics.ts  finite ammo/fuel, resupply, supply-line tracing, dry-out  (slice 3)
-    turn.ts       phased initiative (recon→fires→maneuver + reserve)         (slice 3)
-    actions.ts    shared player-action API (move/fire/resupply/recon)        (slice 3)
-    vision.ts     per-side vision gating                                     (slice 4)
-    commander.ts  inspectable utility AI for the mechs + intent string       (slice 4)
+    dice.ts       seeded + logged rolls                                      ✅
+    combat.ts     uniform model: facing armour + structure + 4-state crits   ✅
+    logistics.ts  finite ammo/fuel, resupply, supply-line tracing, dry-out   ✅
+    turn.ts       phased initiative (recon→fires→maneuver + reserve)         ✅
+    actions.ts    shared action API (move/fire/resupply), forward-observer   ✅
+    vision.ts     per-side vision gating                                     ✅
+    pathing.ts    Dijkstra reachability for the AI                           ✅
+    commander.ts  inspectable utility AI for the mechs + intent string       ✅
+    objective.ts  Seize evaluation + win/loss                                ✅
+    match.ts      headless match runner + support policies (self-play seam)  ✅
     enabler.ts    AI that plays the support role (enemy + self-play)         (v1)
   data/   types.ts (schemas) · terrain.ts · units.ts · maps/                 ✅
   render/ view.ts (scene/camera) · board.ts (heightmap + grid + markers)     ✅
@@ -79,14 +83,32 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
   cover/screening lower it), a fog-caution penalty for unscouted hexes (RECON
   removes it), and an attack pull toward degraded enemies. Deterministic (no
   RNG), pure `decideMech()` returns the action + a human-readable **intent**
-  (surfaced on-board and in the HUD). Verified: 17 unit tests (LOS/visibility,
+  (surfaced on-board and in the HUD). Verified: 10 unit tests (LOS/visibility,
   sustainment need, advance vs break-contact-to-resupply, immobilised-holds,
   the exposure levers — suppression/cover/vision-gating, target vision-gating,
-  determinism) — 74 total — plus a screenshot of commander-driven mechs showing
+  determinism) — 57 total — plus a screenshot of commander-driven mechs showing
   their live intents ("Advancing on the objective" / "Immobilised — holding").
-- **Slice 5 — Objective + the core proof**
-  Seize evaluation + win/loss; the falsifiable criterion-1 scenario (same seed
-  fails without support, succeeds with it). **Gate: the hypothesis.**
+- **Slice 5 — Objective + the core proof** ✅ **— hypothesis PROVEN**
+  Seize evaluation + win/loss (`sim/objective.ts`: attacker takes the zone by the
+  turn limit; loses on the clock, all-mechs-lost, or all-support-lost). A
+  vision-gated **forward-observer rule** (you can't engage — even with indirect
+  fire — what your side can't see) makes recon load-bearing, and a **shaken**
+  crew now can't fire (so suppressive fire actually shields an advance). The
+  match runner (`sim/match.ts`) plays a whole battle headless, with each side's
+  support supplied as a policy; the player plan is recon-scout + artillery-
+  suppress + supply-resupply + screen. **The core proof** (`test/coreproof.test.ts`,
+  fixed seed): unsupported, the mechs run dry and are stopped short → **RED holds
+  0/12 seeds**; with the same seed + the support plan → **BLUE seizes (≥9/12,
+  18/20 broadly)** — the delta attributable to player action alone. Deterministic,
+  always terminates, supply never negative. Verified: 9 unit tests (5 objective +
+  4 proof) — **66 total** — and two screenshots: the unsupported failure (mech
+  stranded "low fuel", RED HELD) vs the supported success (BLUE SEIZED in 9 turns).
+
+> **v0 is complete.** All five brief §4 acceptance criteria are met: the
+> falsifiable core proof (criterion 1) holds, the sim is deterministic, no
+> invariant is violated and every match terminates, the commander exposes a
+> human-readable intent each turn, and the harness runs headless + captures
+> board screenshots.
 - **Slice 6 — Interactive UI**
   Minimal click-to-act layer feeding the same action API.
 
