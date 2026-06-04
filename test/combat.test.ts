@@ -48,6 +48,7 @@ function mkState(seed: number, units: UnitInstance[]): GameState {
     seed,
     rngState: seed >>> 0,
     rollLog: [],
+    intents: {},
   };
 }
 

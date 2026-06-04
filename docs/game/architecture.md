@@ -69,9 +69,21 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
   47 total — plus a deterministic scripted skirmish on the real map (headless
   dump: 35 logged rolls, a unit destroyed, a mech mobility-killed & stranded,
   suppression climbing) and a board screenshot with health/supply status badges.
-- **Slice 4 — Vision + mech commander AI**
-  Vision gating; the inspectable utility commander reading v0's inputs; the
-  per-turn intent string. Decision unit-tests (state → action).
+- **Slice 4 — Vision + mech commander AI** ✅
+  Per-side vision (`sim/vision.ts`: sight range, sensors-crit-halved, terrain-LOS
+  gated — "no recon → blind"). The inspectable utility commander
+  (`sim/commander.ts`): for each mech it scores every reachable hex
+  (`sim/pathing.ts` Dijkstra) by a transparent weighted sum and takes the best,
+  then fires. Every term is a player lever — objective pull, supply pull × a
+  sustainment **need** (resupply eases it), exposure (FIRES suppress enemies,
+  cover/screening lower it), a fog-caution penalty for unscouted hexes (RECON
+  removes it), and an attack pull toward degraded enemies. Deterministic (no
+  RNG), pure `decideMech()` returns the action + a human-readable **intent**
+  (surfaced on-board and in the HUD). Verified: 17 unit tests (LOS/visibility,
+  sustainment need, advance vs break-contact-to-resupply, immobilised-holds,
+  the exposure levers — suppression/cover/vision-gating, target vision-gating,
+  determinism) — 74 total — plus a screenshot of commander-driven mechs showing
+  their live intents ("Advancing on the objective" / "Immobilised — holding").
 - **Slice 5 — Objective + the core proof**
   Seize evaluation + win/loss; the falsifiable criterion-1 scenario (same seed
   fails without support, succeeds with it). **Gate: the hypothesis.**

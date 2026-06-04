@@ -21,4 +21,21 @@ export const RULES = {
   // Logistics dry-out (consecutive turns cut off from a supply source).
   dryMoveTurns: 2, // ≥ this many dry turns → movement points halved
   dryFireTurns: 3, // ≥ this many dry turns → cannot fire (rationing what's left)
+
+  // Mech commander utility AI (the player's influence surface). Thresholds below
+  // which a mech needs to break contact; weights for scoring candidate moves.
+  commander: {
+    ammoLow: 0.34, // ammo fraction under which resupply pressure builds
+    fuelLow: 0.25,
+    structLow: 0.4,
+    needTrigger: 0.34, // sustainment need above which the stance becomes "resupply"
+    wObjective: 3, // pull toward the objective
+    wSupply: 4, // pull toward supply, scaled by need
+    wThreat: 1.2, // push away from exposure
+    wAttack: 5, // pull toward a shot on a degraded enemy
+    coverExposureReduction: 0.18, // per cover point, how much exposure drops
+    supportReduction: 0.22, // per nearby friendly support unit
+    supportRadius: 3,
+    fogCaution: 2.6, // exposure added for advancing into UNSCOUTED hexes (no recon → cautious)
+  },
 } as const;

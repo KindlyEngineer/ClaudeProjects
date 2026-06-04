@@ -1,0 +1,131 @@
+import { describe, it, expect } from "vitest";
+import { decideMech, exposureAt, sustainmentNeed } from "../src/sim/commander";
+import { hexDistance } from "../src/sim/hex";
+import type { ObjectiveDef } from "../src/data/types";
+import { axial, find, openGame, place } from "./helpers";
+
+const OBJ = axial(22, 4);
+const objective: ObjectiveDef = { kind: "seize", turnLimit: 20, zone: [OBJ], attacker: "blue" };
+
+describe("sustainment need", () => {
+  it("is zero when topped up and high when out of ammo", () => {
+    const s = openGame({ w: 26, h: 9, objective, units: [place("mech_assault", "blue", axial(4, 4))] });
+    const mech = find(s, "mech_assault");
+    expect(sustainmentNeed(mech).need).toBe(0);
+    mech.ammo = mech.ammo.map(() => 0);
+    const n = sustainmentNeed(mech);
+    expect(n.need).toBeGreaterThan(0.5);
+    expect(n.reason).toBe("low ammo");
+  });
+});
+
+describe("mech commander — objective & sustainment", () => {
+  it("a healthy mech with a clear field advances on the objective", () => {
+    const s = openGame({ w: 26, h: 9, objective, units: [place("mech_assault", "blue", axial(4, 4))] });
+    const mech = find(s, "mech_assault");
+    const d = decideMech(s, mech);
+    expect(d.stance).toBe("advance");
+    expect(hexDistance(d.destination, OBJ)).toBeLessThan(hexDistance(mech.hex, OBJ));
+    expect(d.intent).toMatch(/advanc/i);
+  });
+
+  it("a mech low on ammo breaks contact toward supply instead of advancing", () => {
+    const s = openGame({
+      w: 26,
+      h: 9,
+      objective,
+      units: [place("mech_assault", "blue", axial(12, 4)), place("supply", "blue", axial(1, 4))],
+    });
+    const mech = find(s, "mech_assault");
+    mech.ammo = mech.ammo.map(() => 0);
+    const d = decideMech(s, mech);
+    expect(d.stance).toBe("resupply");
+    expect(d.intent).toMatch(/resupply.*ammo/i);
+    // It moves back toward the supply line, not on toward the objective.
+    expect(hexDistance(d.destination, OBJ)).toBeGreaterThanOrEqual(hexDistance(mech.hex, OBJ));
+  });
+
+  it("an immobilised mech holds in place", () => {
+    const s = openGame({ w: 26, h: 9, objective, units: [place("mech_assault", "blue", axial(8, 4))] });
+    const mech = find(s, "mech_assault");
+    mech.crits.push("mobility");
+    const d = decideMech(s, mech);
+    expect(d.stance).toBe("immobilised");
+    expect(d.path).toHaveLength(0);
+    expect(d.intent).toMatch(/immobilised/i);
+  });
+});
+
+describe("mech commander — the player's levers (exposure)", () => {
+  it("a visible enemy raises exposure; suppressing it or taking cover lowers it", () => {
+    const s = openGame({
+      w: 26,
+      h: 9,
+      objective,
+      units: [place("mech_assault", "blue", axial(8, 4)), place("armor", "red", axial(12, 4))],
+      terrain: [{ hex: axial(10, 6), terrain: "urban" }],
+    });
+    const enemy = find(s, "armor", "red");
+    const hex = axial(10, 4);
+    const open = exposureAt(s, "blue", hex, [enemy]);
+    expect(open).toBeGreaterThan(0); // a known enemy in range is dangerous
+
+    enemy.suppression = 8; // FIRES lever
+    const suppressed = exposureAt(s, "blue", hex, [enemy]);
+    expect(suppressed).toBeLessThan(open);
+
+    enemy.suppression = 0;
+    const covered = exposureAt(s, "blue", axial(10, 6), [enemy]); // urban cover
+    const openSame = exposureAt(s, "blue", axial(10, 5), [enemy]);
+    expect(covered).toBeLessThan(openSame);
+
+    // Vision gate: an enemy the side cannot see contributes nothing.
+    const unseen = exposureAt(s, "blue", hex, []);
+    expect(unseen).toBeLessThan(open);
+  });
+});
+
+describe("mech commander — vision gating of targets", () => {
+  it("won't engage an enemy in weapon range but out of sight until recon reveals it", () => {
+    const base = () =>
+      openGame({
+        w: 28,
+        h: 9,
+        objective,
+        units: [place("mech_assault", "blue", axial(8, 4)), place("infantry", "red", axial(16, 4))],
+      });
+
+    const blind = base();
+    const mechBlind = find(blind, "mech_assault");
+    // The enemy is within the autocannon's range but beyond the mech's own sight.
+    expect(decideMech(blind, mechBlind).fireTargetId).toBeNull();
+
+    // Drop a recon where it can see the enemy.
+    const withRecon = openGame({
+      w: 28,
+      h: 9,
+      objective,
+      units: [
+        place("mech_assault", "blue", axial(8, 4)),
+        place("infantry", "red", axial(16, 4)),
+        place("recon", "blue", axial(12, 4)),
+      ],
+    });
+    const mechSeen = find(withRecon, "mech_assault");
+    const enemy = find(withRecon, "infantry", "red");
+    expect(decideMech(withRecon, mechSeen).fireTargetId).toBe(enemy.id);
+  });
+});
+
+describe("mech commander — determinism", () => {
+  it("the same state yields the same decision", () => {
+    const s = openGame({
+      w: 26,
+      h: 9,
+      objective,
+      units: [place("mech_assault", "blue", axial(6, 4)), place("armor", "red", axial(14, 4))],
+    });
+    const mech = find(s, "mech_assault");
+    expect(decideMech(s, mech)).toEqual(decideMech(s, mech));
+  });
+});

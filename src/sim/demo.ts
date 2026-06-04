@@ -1,14 +1,15 @@
 import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
 import { attackUnit, canAttack, moveUnit, movePoints, resupplyUnit } from "./actions";
+import { commandMechs } from "./commander";
 import { hexDistance, hexKey, neighbors, type Hex } from "./hex";
 import { livingUnits, type GameState, type UnitInstance } from "./state";
 import { beginTurn, nextPhase } from "./turn";
 
-// A deterministic scripted skirmish — NOT the real AI (that's the commander in
-// Slice 4). It exists so the headless screenshot shows a believable exchange:
-// blue advances east and fires, artillery shapes from the rear, supply keeps the
-// advance fed, red defends. Drives the sim only through the shared action API.
+// A deterministic scripted skirmish for the headless capture. The MECHS are
+// driven by the real commander AI (Slice 4); only the support/logistics units
+// are scripted here (a stand-in for the player) — recon scouts forward, artillery
+// shapes, supply follows. Drives the sim only through the shared action API.
 
 function passableUnoccupied(state: GameState, h: Hex, moverId: number): boolean {
   const cell = state.cells.get(hexKey(h));
@@ -95,7 +96,12 @@ export function scriptedSkirmish(state: GameState, turns = 6): void {
   beginTurn(state);
   const objectiveHex = state.objective.zone[0] ?? { q: 0, r: 0 };
   for (let step = 0; step < turns * 3; step++) {
-    for (const u of livingUnits(state)) actUnit(state, u, objectiveHex); // action guards enforce phase
+    // Support/logistics (the player's stand-in) is scripted; the mechs are the AI.
+    for (const u of livingUnits(state)) {
+      if (unitType(u.typeId).cls !== "mech") actUnit(state, u, objectiveHex);
+    }
+    commandMechs(state, "blue");
+    commandMechs(state, "red");
     nextPhase(state);
   }
 }

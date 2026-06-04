@@ -172,7 +172,8 @@ export function buildBoard(state: GameState): Board {
   for (const u of state.units) {
     if (u.structure <= 0) continue;
     const cell = state.cells.get(hexKey(u.hex));
-    group.add(buildUnitMarker(u, size, (cell?.elevation ?? 0) * ELEV));
+    const intent = unitType(u.typeId).cls === "mech" ? state.intents[u.id] : undefined;
+    group.add(buildUnitMarker(u, size, (cell?.elevation ?? 0) * ELEV, intent));
   }
 
   min.y = 0;
@@ -180,7 +181,7 @@ export function buildBoard(state: GameState): Board {
   return { group, min, max };
 }
 
-function buildUnitMarker(u: UnitInstance, size: number, lift: number): THREE.Group {
+function buildUnitMarker(u: UnitInstance, size: number, lift: number, intent?: string): THREE.Group {
   const g = new THREE.Group();
   const t = unitType(u.typeId);
   const style = CLASS_STYLE[t.cls];
@@ -207,12 +208,41 @@ function buildUnitMarker(u: UnitInstance, size: number, lift: number): THREE.Gro
   g.add(prong);
 
   g.add(makeBadge(u, style.abbr, color));
+  if (intent) g.add(makeIntentBanner(intent, color)); // legible commander intent
 
   // Lift the whole marker to its hex's surface height (reads as grounded) and
   // scale up so units stay legible on the larger board.
   g.scale.setScalar(1.8);
   g.position.set(c.x, lift, c.z);
   return g;
+}
+
+// A wide billboarded banner above a mech showing its commander's current intent.
+function makeIntentBanner(text: string, color: number): THREE.Sprite {
+  const W = 512;
+  const H = 96;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "rgba(8,10,14,0.82)";
+  ctx.beginPath();
+  ctx.roundRect(4, 4, W - 8, H - 8, 16);
+  ctx.fill();
+  ctx.strokeStyle = `#${color.toString(16).padStart(6, "0")}`;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.fillStyle = "#eaf0ff";
+  ctx.font = "30px ui-monospace, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, W / 2, H / 2 + 2, W - 28);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+  sprite.position.set(0, 2.5, 0);
+  sprite.scale.set(2.6 * (W / H), 2.6, 1);
+  return sprite;
 }
 
 // A billboarded badge: side-coloured ring, a health arc (green→red by remaining

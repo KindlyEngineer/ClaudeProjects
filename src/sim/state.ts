@@ -43,6 +43,7 @@ export interface GameState {
   seed: number;
   rngState: number; // advanced by the dice roller (slice 2)
   rollLog: RollRecord[];
+  intents: Record<number, string>; // mech id → the commander's current intent
 }
 
 /** Every random draw is logged for the headless harness (brief §3). */
@@ -93,6 +94,7 @@ export function createGame(map: MapDef, seed: number): GameState {
     seed,
     rngState: seed >>> 0,
     rollLog: [],
+    intents: {},
   };
 }
 
