@@ -130,9 +130,11 @@ export function hasCrit(u: UnitInstance, c: string): boolean {
 export function canMove(u: UnitInstance): boolean {
   return !isDestroyed(u) && !hasCrit(u, "mobility");
 }
-/** A weapon-killed (or destroyed) unit cannot fire. */
+/** A weapon-killed, shaken (morale break), or destroyed unit cannot fire. A
+ *  shaken crew recovers in upkeep once suppression eases — so suppressive fire
+ *  temporarily takes a unit out of the fight. */
 export function canFire(u: UnitInstance): boolean {
-  return !isDestroyed(u) && !hasCrit(u, "weapon");
+  return !isDestroyed(u) && !hasCrit(u, "weapon") && !hasCrit(u, "shaken");
 }
 /** Sensors crit halves sight range. */
 export function effectiveVision(u: UnitInstance): number {

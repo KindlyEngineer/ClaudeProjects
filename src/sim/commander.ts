@@ -107,10 +107,7 @@ function attackOpportunityAt(mech: UnitInstance, hex: Hex, enemies: UnitInstance
   return { value: best, target };
 }
 
-function objectiveHex(state: GameState): Hex {
-  return state.objective.zone[0] ?? { q: 0, r: 0 };
-}
-function nearestDist(hex: Hex, points: Hex[]): number {
+function nearestDist(hex: Hex, points: readonly Hex[]): number {
   let m = Infinity;
   for (const p of points) m = Math.min(m, hexDistance(hex, p));
   return Number.isFinite(m) ? m : 0;
@@ -120,12 +117,13 @@ function nearestDist(hex: Hex, points: Hex[]): number {
 export function decideMech(state: GameState, mech: UnitInstance): CommanderDecision {
   const side = mech.side;
   const enemies = visibleEnemies(state, side);
-  const objHex = objectiveHex(state);
+  const zone = state.objective.zone; // the whole zone is the goal, not one hex
+  const zoneKeys = new Set(zone.map(hexKey));
   const supplyPts = supplySources(state, side);
   const need = sustainmentNeed(mech);
   const c = RULES.commander;
 
-  const dObjFrom = hexDistance(mech.hex, objHex);
+  const dObjFrom = nearestDist(mech.hex, zone);
   const dSupFrom = nearestDist(mech.hex, supplyPts);
 
   // Candidate destinations: just the current hex if immobilised, else reachable.
@@ -136,11 +134,13 @@ export function decideMech(state: GameState, mech: UnitInstance): CommanderDecis
   let best = { hex: mech.hex, objGain: 0, supGain: 0, exp: exposureAt(state, side, mech.hex, enemies), atk: attackOpportunityAt(mech, mech.hex, enemies).value };
   let bestScore = -Infinity;
   const consider = (h: Hex, key: string) => {
-    const objGain = dObjFrom - hexDistance(h, objHex);
+    const objGain = dObjFrom - nearestDist(h, zone);
     const supGain = dSupFrom - nearestDist(h, supplyPts);
     const exp = exposureAt(state, side, h, enemies);
     const atk = attackOpportunityAt(mech, h, enemies).value;
-    const score = c.wObjective * objGain + c.wSupply * need.need * supGain - c.wThreat * exp + c.wAttack * atk;
+    const seize = zoneKeys.has(key) ? c.wSeize : 0; // taking the zone ends the battle
+    const score =
+      c.wObjective * objGain + seize + c.wSupply * need.need * supGain - c.wThreat * exp + c.wAttack * atk;
     if (score > bestScore || (score === bestScore && key < bestKey)) {
       bestScore = score;
       bestKey = key;

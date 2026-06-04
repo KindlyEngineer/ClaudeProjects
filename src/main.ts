@@ -5,6 +5,7 @@ import { createGame, livingUnits } from "./sim/state";
 import { updateSupply } from "./sim/logistics";
 import { decideMech } from "./sim/commander";
 import { scriptedSkirmish } from "./sim/demo";
+import { noSupport, playerSupport, redDefense, runMatch } from "./sim/match";
 import { unitType } from "./data/units";
 import { MAP01 } from "./data/maps/map01";
 
@@ -23,7 +24,12 @@ const view = createView(container);
 const state = createGame(MAP01, seed);
 // ?demo=skirmish runs a deterministic scripted exchange (so the capture shows
 // movement + combat); otherwise just render the opening position.
-if (params.get("demo") === "skirmish") {
+if (params.get("scenario") === "coreproof") {
+  // The core-proof match to a result. ?support=off → unsupported (mechs fail);
+  // otherwise the full player support plan (mechs seize).
+  const support = params.get("support") !== "off";
+  runMatch(state, support ? playerSupport : noSupport, redDefense);
+} else if (params.get("demo") === "skirmish") {
   scriptedSkirmish(state, Number(params.get("turns") ?? 6));
 } else {
   updateSupply(state);
@@ -47,7 +53,13 @@ if (hud) {
     .filter((m) => unitType(m.typeId).cls === "mech")
     .map((m) => `▸ mech #${m.id}: ${state.intents[m.id] ?? "—"}`)
     .join("<br>");
-  hud.innerHTML = header + (intents ? `<br>${intents}` : "");
+  const result =
+    state.outcome === "blue"
+      ? `<br><b style="color:#7fd0ff">RESULT — BLUE SEIZED THE OBJECTIVE</b>`
+      : state.outcome === "red"
+        ? `<br><b style="color:#ff8a7a">RESULT — RED HELD · blue effort failed</b>`
+        : "";
+  hud.innerHTML = header + (intents ? `<br>${intents}` : "") + result;
 }
 
 window.addEventListener("resize", () => view.resize());

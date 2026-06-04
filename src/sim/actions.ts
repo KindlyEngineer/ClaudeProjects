@@ -5,6 +5,7 @@ import { resolveAttack, inRange, type AttackResult } from "./combat";
 import { transferSupply, type ResupplyResult } from "./logistics";
 import { directionTo, hexDistance, hexKey, type Hex } from "./hex";
 import { isEligible } from "./turn";
+import { isScouted } from "./vision";
 import { canFire, canMove, type GameState, type UnitInstance } from "./state";
 
 // The shared player-action API. Every actor — the player's UI, scripted v0
@@ -77,6 +78,10 @@ export function canAttack(state: GameState, attacker: UnitInstance, weaponIndex:
   if (!isEligible(state, attacker) || attacker.actedThisTurn) return false;
   if (!canFire(attacker) || attacker.dryTurns >= RULES.dryFireTurns) return false;
   if (target.structure <= 0 || target.side === attacker.side) return false;
+  // Forward-observer rule: a side can only engage what it can SEE. This is what
+  // makes recon load-bearing — including for indirect fire (you can't shell an
+  // enemy nobody has eyes on).
+  if (!isScouted(state, attacker.side, target.hex)) return false;
   const weapon = unitType(attacker.typeId).weapons[weaponIndex];
   if (!weapon || attacker.ammo[weaponIndex] <= 0) return false;
   return inRange(attacker, weapon, target);
