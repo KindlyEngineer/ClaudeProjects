@@ -10,7 +10,7 @@ import type { UnitClass } from "../data/types";
 // grid overlay, the objective zone, and programmer-art unit markers that show
 // side, class and facing. Pure read of state → a THREE.Group.
 
-const ELEV = 1.2; // world height per elevation unit
+const ELEV = 1.35; // world height per elevation unit
 const LIFT = 0.03; // grid/zone offset above the surface to avoid z-fighting
 const SIDE_COLOR: Record<string, number> = { blue: 0x4a90ff, red: 0xff5a4a };
 
@@ -173,7 +173,9 @@ function buildUnitMarker(u: UnitInstance, size: number, lift: number): THREE.Gro
 
   g.add(makeLabel(style.abbr, color));
 
-  // Lift the whole marker to its hex's surface height (reads as grounded).
+  // Lift the whole marker to its hex's surface height (reads as grounded) and
+  // scale up so units stay legible on the larger board.
+  g.scale.setScalar(1.8);
   g.position.set(c.x, lift, c.z);
   return g;
 }

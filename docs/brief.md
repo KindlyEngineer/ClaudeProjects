@@ -12,6 +12,13 @@
 > - **Heightmap:** **visual** in v0 — the continuous heightmap drives the 2.5D
 >   render; the sim's cover/"approach exposure" comes from per-hex terrain *type*.
 >   Elevation becomes a mechanical input (LOS/range/cover/move-cost) in v1.
+> - **Map scale (owner feedback):** v0's "one small handcrafted map" is a larger
+>   ~30×20 **rectangular** board with naturally-generated terrain (rolling hills,
+>   forest stands, water basins) baked from a fixed internal seed — a stable,
+>   known map that looks organic. Weapon ranges are scaled to suit (direct fire
+>   reaches across a chunk of the field; artillery most of it).
+>
+> Committed verification screenshots live in `docs/shots/`.
 
 You are building a turn-based, hex-based combined-arms tactics game from
 scratch, fully autonomously where possible.

@@ -1,72 +1,133 @@
 import type { Direction, Hex } from "../../sim/hex";
 import type { MapCell, MapDef, UnitPlacement } from "../types";
 
-// "Ridge Approach" — the v0 handcrafted map. A blue force (player support + one
-// AI mech) advances west→east to seize an urban zone held by a red detachment,
-// across an undulating ridge. Built as data: a parallelogram of hexes, each with
-// a terrain type and an elevation (the visual heightmap), plus unit placements
-// and a Seize objective. Authored programmatically but fully data — no sim code
+// "Ridge Approach" — the v0 map. A blue force (player support + one AI mech)
+// advances west→east to seize an urban zone held by a red detachment, across
+// natural rolling terrain. Authored as a FIXED deterministic generation (its own
+// internal seed, independent of the run seed) so it's a stable, known map, while
+// looking organic rather than a hand-placed grid. Built as data — no sim code
 // references this map by name.
+//
+// Layout uses offset coordinates (col,row) → axial, so the rendered board fills
+// a RECTANGLE rather than a sheared parallelogram.
 
-const COLS = 12; // q: 0..11
-const ROWS = 9; // r: 0..8
+const COLS = 30;
+const ROWS = 20;
+const MAP_SEED = 0x5eed1a;
 
-/** Smooth elevation field → the continuous heightmap look (visual in v0). */
-function elevationAt(q: number, r: number): number {
-  const ridge = Math.sin((q / COLS) * Math.PI * 1.3) * 1.6; // a diagonal ridge
-  const roll = Math.cos((r / ROWS) * Math.PI * 2) * 0.6;
-  const bump = Math.sin((q + r) * 0.9) * 0.25; // gentle local texture
-  return Math.max(0, ridge + roll + bump + 1.2);
+/** Offset (col,row) → axial (q,r) for a flat-top rectangular board. */
+function offsetToAxial(col: number, row: number): Hex {
+  return { q: col, r: row - Math.floor(col / 2) };
 }
 
-function terrainAt(q: number, r: number): string {
-  // A road threads west→east along the middle rows.
-  if (r === 4 && q < 9) return "road";
-  // Urban objective cluster in the east.
-  if (q >= 8 && q <= 10 && r >= 3 && r <= 5) return "urban";
-  // A woods belt screening the centre.
-  if (q >= 4 && q <= 5 && r >= 1 && r <= 6) return "woods";
-  // A small pond.
-  if (q === 2 && (r === 6 || r === 7)) return "water";
-  // Higher ground reads as hillside.
-  if (elevationAt(q, r) > 2.4) return "hill";
+// ── Seeded value noise + fBm for natural elevation / forest distribution. ──
+function hash2(ix: number, iy: number, seed: number): number {
+  let h = (Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 0x9e3779b1)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function valueNoise(x: number, y: number, seed: number): number {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  const u = fx * fx * (3 - 2 * fx);
+  const v = fy * fy * (3 - 2 * fy);
+  const a = hash2(ix, iy, seed);
+  const b = hash2(ix + 1, iy, seed);
+  const c = hash2(ix, iy + 1, seed);
+  const d = hash2(ix + 1, iy + 1, seed);
+  return a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v;
+}
+function fbm(x: number, y: number, seed: number): number {
+  let amp = 1;
+  let freq = 1;
+  let sum = 0;
+  let norm = 0;
+  for (let o = 0; o < 4; o++) {
+    sum += amp * valueNoise(x * freq, y * freq, seed + o * 1013);
+    norm += amp;
+    amp *= 0.5;
+    freq *= 2;
+  }
+  return sum / norm; // [0,1)
+}
+
+const ELEV_AMP = 6.0; // peak elevation units
+const NOISE_SCALE = 0.15; // lower = broader, smoother landforms
+const CONTRAST = 1.9; // push fBm toward extremes → real hills & valleys, not mush
+
+/** fBm with contrast → a 0..1 landform value with pronounced highs and lows. */
+function landform(col: number, row: number): number {
+  const e = fbm(col * NOISE_SCALE, row * NOISE_SCALE, MAP_SEED);
+  return Math.min(1, Math.max(0, (e - 0.5) * CONTRAST + 0.5));
+}
+
+// Handcrafted features sit on top of the natural terrain.
+const OBJ_COLS = [22, 23, 24];
+const OBJ_ROWS = [8, 9, 10, 11];
+const isObjectiveArea = (col: number, row: number) =>
+  OBJ_COLS.includes(col) && OBJ_ROWS.includes(row);
+const isDeployWest = (col: number) => col <= 2;
+
+function elevationAt(col: number, row: number): number {
+  return landform(col, row) * ELEV_AMP;
+}
+
+function terrainAt(col: number, row: number): string {
+  // Keep deployment lanes and the objective buildable/passable.
+  if (isObjectiveArea(col, row)) return "urban";
+  const hi = landform(col, row);
+  if (isDeployWest(col)) return hi > 0.78 ? "hill" : "open";
+  if (hi < 0.13) return "water"; // deepest basins flood (kept modest so land routes remain)
+  if (hi > 0.66) return "hill"; // ridgelines and peaks
+  const forest = fbm(col * 0.22 + 50, row * 0.22 + 50, MAP_SEED ^ 0x1234);
+  if (forest > 0.6) return "woods"; // forest stands cluster naturally
   return "open";
 }
 
 function buildCells(): MapCell[] {
   const cells: MapCell[] = [];
-  for (let q = 0; q < COLS; q++) {
-    for (let r = 0; r < ROWS; r++) {
-      cells.push({ hex: { q, r }, terrain: terrainAt(q, r), elevation: elevationAt(q, r) });
+  for (let col = 0; col < COLS; col++) {
+    for (let row = 0; row < ROWS; row++) {
+      cells.push({ hex: offsetToAxial(col, row), terrain: terrainAt(col, row), elevation: elevationAt(col, row) });
     }
   }
   return cells;
 }
 
 const E: Direction = 0; // facing east (toward the objective)
-const W: Direction = 3; // facing west (defenders look back at the approach)
+const W: Direction = 3; // facing west (defenders watch the approach)
+
+// Placements authored in offset (col,row) for readability, converted to axial.
+const place = (type: string, side: "blue" | "red", col: number, row: number, facing: Direction): UnitPlacement => ({
+  type,
+  side,
+  hex: offsetToAxial(col, row),
+  facing,
+});
 
 const units: UnitPlacement[] = [
   // Blue: one AI mech (main effort) + the player's support/logistics effort.
-  { type: "mech_assault", side: "blue", hex: { q: 1, r: 4 }, facing: E },
-  { type: "recon", side: "blue", hex: { q: 1, r: 2 }, facing: E },
-  { type: "armor", side: "blue", hex: { q: 0, r: 5 }, facing: E },
-  { type: "infantry", side: "blue", hex: { q: 0, r: 3 }, facing: E },
-  { type: "artillery", side: "blue", hex: { q: 0, r: 6 }, facing: E },
-  { type: "supply", side: "blue", hex: { q: 0, r: 4 }, facing: E },
+  place("mech_assault", "blue", 1, 9, E),
+  place("recon", "blue", 2, 5, E),
+  place("armor", "blue", 1, 12, E),
+  place("infantry", "blue", 0, 7, E),
+  place("artillery", "blue", 0, 11, E),
+  place("supply", "blue", 0, 9, E),
 
   // Red: a detachment dug in around the urban objective.
-  { type: "mech_assault", side: "red", hex: { q: 9, r: 4 }, facing: W },
-  { type: "infantry", side: "red", hex: { q: 9, r: 3 }, facing: W },
-  { type: "armor", side: "red", hex: { q: 10, r: 5 }, facing: W },
-  { type: "supply", side: "red", hex: { q: 11, r: 4 }, facing: W },
+  place("mech_assault", "red", 23, 9, W),
+  place("infantry", "red", 22, 8, W),
+  place("armor", "red", 24, 11, W),
+  place("supply", "red", 26, 10, W),
 ];
 
 const zone: Hex[] = [
-  { q: 9, r: 4 },
-  { q: 9, r: 3 },
-  { q: 9, r: 5 },
-  { q: 10, r: 4 },
+  offsetToAxial(23, 9),
+  offsetToAxial(23, 10),
+  offsetToAxial(22, 9),
+  offsetToAxial(24, 10),
 ];
 
 export const MAP01: MapDef = {
@@ -74,5 +135,5 @@ export const MAP01: MapDef = {
   hexSize: 1,
   cells: buildCells(),
   units,
-  objective: { kind: "seize", turnLimit: 14, zone, attacker: "blue" },
+  objective: { kind: "seize", turnLimit: 18, zone, attacker: "blue" },
 };
