@@ -167,8 +167,20 @@ memory), never ground truth. Staged, gated:
     positions, attacker untouched) — 76 total. With the now-competent defender,
     the core proof is decisive but realistic: unaided **0/20**, with support
     **~16/24 (≥12/20)** — the defender sometimes holds even a supported attack.
-  - **AI-3b — Counterattack, reserves & target deconfliction** *(next)*.
-  - **AI-3c — Adaptivity + bulk self-play tuning**.
+  - **AI-3b — Information-gated proactivity** ✅ — aggression is *earned, never
+    assumed*. A side rates its situation (`sim/assess.ts`) from belief ONLY: own
+    force (fully known) vs the enemy it has *perceived*, inflating the unknown —
+    unscouted ground around a contact is assumed to hide support, so a thin
+    picture can't justify an attack. A posture state machine (with hysteresis,
+    in `state.posture`, updated each turn) runs **hold → probe → counter**: with
+    no good picture the defender PROBES with recon to gain contact; only once it
+    has scouted around the spearhead AND perceives a favourable ratio does it
+    COUNTERATTACK; against a supported attack it perceives no edge and holds.
+    Tasks `probe`/`counter` modulate the unit AI (a counterattack commits hard).
+    Verified: 4 assessment tests (no-contact→probe, scouted-isolated→counter,
+    scouted-strong→hold, determinism) — 80 total. In-match the counter fires
+    only opportunistically (an isolated, pressing attacker) — never reflexive.
+  - **AI-3c — Adaptivity + bulk self-play tuning** *(next)*.
 
 Then the rest of v1 (Breakthrough objective, more units/maps in data) per brief §5.
 

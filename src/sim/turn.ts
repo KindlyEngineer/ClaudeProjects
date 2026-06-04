@@ -1,6 +1,7 @@
 import { RULES } from "../data/rules";
 import type { UnitClass } from "../data/types";
 import { unitType } from "../data/units";
+import { updatePostures } from "./assess";
 import { updateBelief } from "./knowledge";
 import { updateSupply } from "./logistics";
 import { livingUnits, type GameState, type Phase, type UnitInstance } from "./state";
@@ -47,6 +48,7 @@ export function beginTurn(state: GameState): void {
   updateSupply(state);
   updateBelief(state, "blue"); // refresh each side's fog-limited picture
   updateBelief(state, "red");
+  updatePostures(state); // re-assess the defender's posture from what it now knows
   for (const u of livingUnits(state)) {
     u.movedThisTurn = false;
     u.actedThisTurn = false;

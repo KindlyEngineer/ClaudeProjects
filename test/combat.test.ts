@@ -51,6 +51,7 @@ function mkState(seed: number, units: UnitInstance[]): GameState {
     rollLog: [],
     intents: {},
     belief: { blue: new Map(), red: new Map() },
+    posture: { blue: { kind: "hold", since: 1, targetId: null }, red: { kind: "hold", since: 1, targetId: null } },
   };
 }
 

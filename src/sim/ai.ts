@@ -212,6 +212,35 @@ function needsSupply(u: UnitInstance): boolean {
   return u.fuel < t.fuelMax * 0.6 || u.ammo.some((a, i) => a < t.weapons[i].ammoMax);
 }
 
+/** Modulate a role's weights by its assigned task: a counterattack commits hard
+ *  (more attack/objective, far less exposure-aversion), a probe pushes forward to
+ *  gain contact, a hold settles into good defensive ground. */
+function taskWeights(base: Partial<Record<ConsiderationName, number>>, task?: Task): Partial<Record<ConsiderationName, number>> {
+  if (!task) return base;
+  const w: Record<string, number> = { ...base };
+  const add = (k: ConsiderationName, v: number) => (w[k] = (w[k] ?? 0) + v);
+  const mul = (k: ConsiderationName, f: number) => w[k] !== undefined && (w[k] *= f);
+  switch (task.kind) {
+    case "counter":
+      add("objective", 3);
+      add("attack", 4);
+      mul("exposure", 0.4);
+      break;
+    case "probe":
+      add("objective", 1.5);
+      mul("exposure", 0.6);
+      mul("standoff", 0.3);
+      break;
+    case "hold":
+      add("cover", 0.6);
+      add("standoff", 0.4);
+      break;
+    default:
+      break;
+  }
+  return w as Partial<Record<ConsiderationName, number>>;
+}
+
 /** Decide one unit's move this turn (pure — no mutation), scoring reachable
  *  hexes by its role's weighted considerations. */
 export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): UnitDecision {
@@ -242,7 +271,7 @@ export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): U
     idealRange: role.idealRange,
   };
 
-  const entries = Object.entries(role.weights) as Array<[ConsiderationName, number]>;
+  const entries = Object.entries(taskWeights(role.weights, task)) as Array<[ConsiderationName, number]>;
   const score = (h: Hex): number => {
     let s = 0;
     for (const [name, w] of entries) s += w * CONSIDERATIONS[name](ctx, h);
@@ -299,6 +328,10 @@ function describe(
   // A unit under a defensive task reports what the plan has it doing.
   if (task) {
     switch (task.kind) {
+      case "probe":
+        return { stance: "scout", intent: x.fireTargetId !== null ? `Probing — contact with ${tgtName()}` : "Probing forward to gain contact" };
+      case "counter":
+        return { stance: "assault", intent: x.fireTargetId !== null ? `Counterattacking ${tgtName()}` : "Counterattacking — exploiting the advantage" };
       case "screen":
         return { stance: "screen", intent: x.fireTargetId !== null ? `Screening — engaging ${tgtName()}` : "Screening the approach" };
       case "rove":

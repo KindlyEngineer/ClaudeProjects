@@ -13,7 +13,7 @@ import { livingUnits, type GameState } from "./state";
 // variety comes from seeded "AI noise", so the same seed replays identically
 // (self-play/tests hold) while no two seeds — and few turns — play the same way.
 
-export type TaskKind = "hold" | "screen" | "rove" | "rear";
+export type TaskKind = "hold" | "screen" | "rove" | "rear" | "probe" | "counter";
 
 export interface Task {
   goalHex: Hex;
@@ -64,11 +64,8 @@ export function planForce(state: GameState, side: Side): ForcePlan {
   const threatFromMinQ = state.objective.attacker === "blue";
   const forwardSign = threatFromMinQ ? -1 : 1;
 
-  // Seeded posture: how far forward to set up, and whether the mech roves.
+  // Seeded variety: how far forward the prepared positions sit.
   const forwardness = 1 + Math.floor(aiNoise(state, side, 1) * 3); // 1..3 hexes
-  const roveMech = aiNoise(state, side, 2) < 0.45; // sometimes the heavy element manoeuvres
-  const screenFwd = aiNoise(state, side, 3) < 0.5; // sometimes push a forward screen
-
   const idealForwardQ = obj.q + forwardSign * forwardness;
   // Candidate prepared positions: near the objective, cover preferred, on the
   // threat-facing side; a seeded jitter per hex breaks ties → varied layouts.
@@ -113,24 +110,34 @@ export function planForce(state: GameState, side: Side): ForcePlan {
       .map((c) => ({ hex: c.hex, d: Math.abs(c.hex.q - rearQ) + hexDistance(c.hex, obj) * 0.3 }))
       .sort((a, b) => a.d - b.d)[0]?.hex ?? obj;
 
+  // Posture (set with hysteresis by assess.updatePostures) shapes the plan.
+  const posture = state.posture[side].kind;
+  const targetId = state.posture[side].targetId;
+  const targetHex = targetId !== null ? state.belief[side].get(targetId)?.hex : undefined;
+  // A forward point to push recon toward when gaining information.
+  const probeHex = nearestPassable(state, { q: obj.q + forwardSign * 8, r: obj.r }, obj) ?? obj;
+
   for (const u of livingUnits(state, side)) {
     const cls = unitType(u.typeId).cls;
     if (cls === "supply") {
-      tasks.set(u.id, { goalHex: rearHex, kind: "rear" });
+      tasks.set(u.id, { goalHex: rearHex, kind: "rear" }); // train stays safe
+    } else if (cls === "recon" && (posture === "probe" || posture === "counter")) {
+      tasks.set(u.id, { goalHex: probeHex, kind: "probe" }); // gain / keep contact
+    } else if (posture === "counter" && targetHex && (cls === "mech" || cls === "armor")) {
+      tasks.set(u.id, { goalHex: targetHex, kind: "counter" }); // strike the exposed threat
     } else if (cls === "mech") {
-      if (roveMech) {
-        // Manoeuvre to a forward cover/overwatch position instead of sitting.
-        const fwd = take((h) => forwardSign < 0 ? h.q < obj.q : h.q > obj.q) ?? nearestZoneHex(u.hex);
-        tasks.set(u.id, { goalHex: fwd, kind: "rove" });
-      } else {
-        tasks.set(u.id, { goalHex: nearestZoneHex(u.hex), kind: "hold" }); // anchor the objective
-      }
-    } else if (screenFwd && (cls === "recon" || cls === "infantry")) {
-      const screen = take((h) => (forwardSign < 0 ? h.q <= idealForwardQ : h.q >= idealForwardQ)) ?? u.hex;
-      tasks.set(u.id, { goalHex: screen, kind: "screen" });
+      tasks.set(u.id, { goalHex: nearestZoneHex(u.hex), kind: "hold" }); // anchor the objective
     } else {
-      tasks.set(u.id, { goalHex: take(() => true) ?? u.hex, kind: "hold" });
+      tasks.set(u.id, { goalHex: take(() => true) ?? u.hex, kind: "hold" }); // prepared position
     }
   }
   return { tasks };
+}
+
+/** Nearest passable cell to an approximate point (tie-broken toward `anchor`). */
+function nearestPassable(state: GameState, approx: Hex, anchor: Hex): Hex | undefined {
+  return state.map.cells
+    .filter((c) => passable(state, c.hex))
+    .map((c) => ({ hex: c.hex, d: hexDistance(c.hex, approx) + hexDistance(c.hex, anchor) * 0.2 }))
+    .sort((a, b) => a.d - b.d)[0]?.hex;
 }

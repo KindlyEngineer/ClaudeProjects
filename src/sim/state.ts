@@ -46,6 +46,7 @@ export interface GameState {
   rollLog: RollRecord[];
   intents: Record<number, string>; // mech id → the commander's current intent
   belief: { blue: Belief; red: Belief }; // fog-limited knowledge each side reasons on
+  posture: { blue: PostureState; red: PostureState }; // operational posture per side
 }
 
 /** Every random draw is logged for the headless harness (brief §3). */
@@ -73,6 +74,15 @@ export interface Sighting {
 
 /** Per-side belief: enemy id → last-known sighting. */
 export type Belief = Map<number, Sighting>;
+
+/** A side's current operational posture (set by the planner each turn, with
+ *  hysteresis). "probe" = gain information; "counter" = perceived advantage,
+ *  go aggressive; "hold" = defend prepared positions. */
+export interface PostureState {
+  kind: "hold" | "probe" | "counter";
+  since: number;
+  targetId: number | null;
+}
 
 let nextId = 1;
 
@@ -117,6 +127,10 @@ export function createGame(map: MapDef, seed: number): GameState {
     rollLog: [],
     intents: {},
     belief: { blue: new Map(), red: new Map() },
+    posture: {
+      blue: { kind: "hold", since: 1, targetId: null },
+      red: { kind: "hold", since: 1, targetId: null },
+    },
   };
 }
 
