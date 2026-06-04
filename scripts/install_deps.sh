@@ -17,6 +17,13 @@ if [ -f package.json ] && [ ! -d node_modules ]; then
   fi
 fi
 
+# Optional: full upstream Chromium, only if the Playwright CDN is allowlisted.
+# The screenshot harness falls back to @sparticuz/chromium (delivered via npm),
+# so a failure here is harmless — silenced to avoid alarming session-start logs.
+if [ -f package.json ] && grep -q '"playwright"' package.json 2>/dev/null; then
+  npx --yes playwright install chromium >/dev/null 2>&1 || true
+fi
+
 # --- Python ---
 if [ -f pyproject.toml ]; then
   if   command -v uv >/dev/null 2>&1; then uv sync || true
