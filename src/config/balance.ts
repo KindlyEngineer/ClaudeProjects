@@ -64,3 +64,64 @@ export const KNOCKBACK_DECAY = 6; // per-second decay
 
 // Enemy pathing: the flow field is rebuilt from the player every N sim ticks.
 export const FLOW_REBUILD_TICKS = 4;
+
+// ─── Weapons (M3 build loop) ─────────────────────────────────────────────────
+// One auto-weapon per archetype; each levels via the draft. Stats below are the
+// L1 baseline — weapons.ts scales them per level and applies passive multipliers.
+export const MAX_WEAPON_LEVEL = 6;
+export const DRAFT_OPTIONS = 3; // cards offered on each level-up
+
+// Gun — the starting weapon: single shot at the nearest visible enemy.
+export const GUN_COOLDOWN = 0.32;
+export const GUN_DAMAGE = 7;
+export const GUN_KNOCKBACK = 7.5;
+
+// Lance — piercing/lane: a fast bolt that punches through a chokepoint of enemies.
+export const LANCE_COOLDOWN = 0.7;
+export const LANCE_DAMAGE = 6;
+export const LANCE_SPEED = 34;
+export const LANCE_RANGE = 26;
+export const LANCE_PIERCE = 2; // enemies pierced at L1 (+1 / level)
+export const LANCE_TTL = 1.0;
+
+// Lobber — arcs OVER walls (ignores LOS); area damage where it lands. Counters cover.
+export const LOB_COOLDOWN = 1.15;
+export const LOB_DAMAGE = 9;
+export const LOB_SPEED = 17;
+export const LOB_RANGE = 22;
+export const LOB_AREA = 2.6; // explosion radius at L1
+export const LOB_TTL = 2.2;
+
+// Orbit — aura blades circling the player; cover-agnostic, the always-safe pick.
+export const ORBIT_COUNT = 2; // blades at L1 (+1 every other level)
+export const ORBIT_RADIUS = 3.3;
+export const ORBIT_ANGULAR_SPEED = 2.6; // radians / second
+export const ORBIT_DPS = 24; // damage / second to overlapped enemies
+export const ORBIT_HIT_RADIUS = 0.95;
+
+// Knocker — heavy knockback, low damage: the "shove them into the hazard" weapon.
+export const KNOCKER_COOLDOWN = 0.95;
+export const KNOCKER_DAMAGE = 3;
+export const KNOCKER_SPEED = 21;
+export const KNOCKER_RANGE = 17;
+export const KNOCKER_KNOCKBACK = 22; // big impulse vs the gun's 7.5
+export const KNOCKER_TTL = 0.85;
+
+// Passive stat cards (each can be drafted up to PASSIVE_MAX_LEVEL times).
+export const PASSIVE_MAX_LEVEL = 5;
+export const PASSIVE_DMG_STEP = 0.15; // +15% global damage / level
+export const PASSIVE_FIRERATE_STEP = 0.12; // +12% fire rate (shorter cooldown) / level
+export const PASSIVE_SPEED_STEP = 0.08; // +8% move speed / level
+export const PASSIVE_MAXHP_STEP = 20; // +20 max HP / level (also heals)
+export const PASSIVE_MAGNET_STEP = 0.45; // +45% gem magnet radius / level
+
+// ─── Difficulty curve + boss ─────────────────────────────────────────────────
+export const ENEMY_HP_RAMP_SEC = 100; // enemy HP doubles every this many seconds
+export const ENEMY_SPEED_RAMP = 0.4; // up to +40% enemy speed by full spawn ramp
+export const BOSS_INTERVAL_SEC = 150; // a boss arrives every 2.5 minutes
+export const BOSS_HP = 600; // first boss HP (grows each time)
+export const BOSS_HP_GROWTH = 1.6; // × per subsequent boss
+export const BOSS_RADIUS = 2.0;
+export const BOSS_SPEED = 2.4;
+export const BOSS_CONTACT_DPS = 30;
+export const BOSS_GEM_DROP = 18; // XP gems scattered on death

@@ -8,6 +8,11 @@ import { MAX_ENTITIES } from "../config/balance";
 export const KIND_ENEMY = 1;
 export const KIND_PROJECTILE = 2;
 export const KIND_GEM = 3;
+export const KIND_ORBITER = 4; // aura blade circling the player (orbit weapon)
+
+// Enemy variants (stored in `variant`).
+export const VARIANT_GRUNT = 0;
+export const VARIANT_BOSS = 1;
 
 export class World {
   readonly cap: number;
@@ -23,7 +28,13 @@ export class World {
   readonly amount: Float32Array; // projectile damage OR gem xp value
   readonly kx: Float32Array; // knockback velocity (enemies)
   readonly kz: Float32Array;
-  readonly aux: Float32Array; // projectile: shooter's ground height (for high-ground)
+  readonly maxhp: Float32Array; // spawn HP (enemy health-bar render)
+  readonly pierce: Float32Array; // projectile: enemies it can still punch through
+  readonly kb: Float32Array; // projectile: knockback impulse imparted on hit
+  readonly area: Float32Array; // projectile: explosion radius (lobber); 0 = none
+  readonly angle: Float32Array; // orbiter: current orbital angle (radians)
+  readonly wkind: Uint8Array; // projectile/orbiter: weapon archetype id (render + behaviour)
+  readonly variant: Uint8Array; // enemy: VARIANT_GRUNT / VARIANT_BOSS
 
   /** Number of live entities (any kind). */
   aliveCount = 0;
@@ -43,7 +54,13 @@ export class World {
     this.amount = new Float32Array(cap);
     this.kx = new Float32Array(cap);
     this.kz = new Float32Array(cap);
-    this.aux = new Float32Array(cap);
+    this.maxhp = new Float32Array(cap);
+    this.pierce = new Float32Array(cap);
+    this.kb = new Float32Array(cap);
+    this.area = new Float32Array(cap);
+    this.angle = new Float32Array(cap);
+    this.wkind = new Uint8Array(cap);
+    this.variant = new Uint8Array(cap);
     // Fill the free list high→low so the first spawns get low indices.
     for (let i = cap - 1; i >= 0; i--) this.freeList.push(i);
   }
@@ -65,6 +82,12 @@ export class World {
     this.vz[id] = 0;
     this.kx[id] = 0;
     this.kz[id] = 0;
+    this.pierce[id] = 0;
+    this.kb[id] = 0;
+    this.area[id] = 0;
+    this.angle[id] = 0;
+    this.wkind[id] = 0;
+    this.variant[id] = 0;
     this.aliveCount--;
     this.freeList.push(id);
   }
