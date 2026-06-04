@@ -53,9 +53,9 @@ function fbm(x: number, y: number, seed: number): number {
   return sum / norm; // [0,1)
 }
 
-const ELEV_AMP = 6.0; // peak elevation units
+const ELEV_AMP = 4.4; // peak elevation units — gentle rolling hills, not mountains
 const NOISE_SCALE = 0.15; // lower = broader, smoother landforms
-const CONTRAST = 1.9; // push fBm toward extremes → real hills & valleys, not mush
+const CONTRAST = 1.4; // mild push toward highs/lows; too high reads as harsh peaks
 
 /** fBm with contrast → a 0..1 landform value with pronounced highs and lows. */
 function landform(col: number, row: number): number {
@@ -79,8 +79,8 @@ function terrainAt(col: number, row: number): string {
   if (isObjectiveArea(col, row)) return "urban";
   const hi = landform(col, row);
   if (isDeployWest(col)) return hi > 0.78 ? "hill" : "open";
-  if (hi < 0.13) return "water"; // deepest basins flood (kept modest so land routes remain)
-  if (hi > 0.66) return "hill"; // ridgelines and peaks
+  if (hi < 0.14) return "water"; // deepest basins flood (kept modest so land routes remain)
+  if (hi > 0.78) return "hill"; // only the highest crests read as hillside
   const forest = fbm(col * 0.22 + 50, row * 0.22 + 50, MAP_SEED ^ 0x1234);
   if (forest > 0.6) return "woods"; // forest stands cluster naturally
   return "open";

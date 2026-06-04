@@ -10,7 +10,7 @@ import type { UnitClass } from "../data/types";
 // grid overlay, the objective zone, and programmer-art unit markers that show
 // side, class and facing. Pure read of state → a THREE.Group.
 
-const ELEV = 1.35; // world height per elevation unit
+const ELEV = 1.2; // world height per elevation unit
 const LIFT = 0.03; // grid/zone offset above the surface to avoid z-fighting
 const SIDE_COLOR: Record<string, number> = { blue: 0x4a90ff, red: 0xff5a4a };
 
@@ -32,6 +32,38 @@ export interface Board {
   group: THREE.Group;
   min: THREE.Vector3;
   max: THREE.Vector3;
+}
+
+/** Per-vertex normals averaged over vertices sharing an XZ position (the surface
+ *  is a heightfield), forced upward so the lit face is always the top. This
+ *  smooths the seams between hexes into a continuous rolling surface. */
+function smoothNormals(positions: number[]): number[] {
+  const acc = new Map<string, [number, number, number]>();
+  const key = (x: number, z: number) => `${Math.round(x * 1000)},${Math.round(z * 1000)}`;
+  for (let t = 0; t < positions.length; t += 9) {
+    const ax = positions[t], ay = positions[t + 1], az = positions[t + 2];
+    const bx = positions[t + 3], by = positions[t + 4], bz = positions[t + 5];
+    const cx = positions[t + 6], cy = positions[t + 7], cz = positions[t + 8];
+    let nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay);
+    let ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
+    let nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+    if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; } // upward
+    for (const off of [0, 3, 6]) {
+      const k = key(positions[t + off], positions[t + off + 2]);
+      const e = acc.get(k) ?? [0, 0, 0];
+      e[0] += nx; e[1] += ny; e[2] += nz;
+      acc.set(k, e);
+    }
+  }
+  const out = new Array<number>(positions.length);
+  for (let i = 0; i < positions.length; i += 3) {
+    const e = acc.get(key(positions[i], positions[i + 2]))!;
+    const len = Math.hypot(e[0], e[1], e[2]) || 1;
+    out[i] = e[0] / len;
+    out[i + 1] = e[1] / len;
+    out[i + 2] = e[2] / len;
+  }
+  return out;
 }
 
 export function buildBoard(state: GameState): Board {
@@ -79,7 +111,9 @@ export function buildBoard(state: GameState): Board {
       const az = c.z + a.z;
       const bx = c.x + b.x;
       const bz = c.z + b.z;
-      positions.push(c.x, cy, c.z, ax, cornerHeight(ax, az), az, bx, cornerHeight(bx, bz), bz);
+      // Wind center→b→a so the top face is front-facing (upward normal) to the
+      // overhead camera — keeps the lit side up without relying on DoubleSide flips.
+      positions.push(c.x, cy, c.z, bx, cornerHeight(bx, bz), bz, ax, cornerHeight(ax, az), az);
       for (let v = 0; v < 3; v++) colors.push(col.r, col.g, col.b);
       grow(ax, cornerHeight(ax, az), az);
     }
@@ -87,15 +121,16 @@ export function buildBoard(state: GameState): Board {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  geo.computeVertexNormals();
+  // Smooth normals shared across coincident corners → a continuous heightmap
+  // surface (rounded relief) rather than faceted per-hex flat shading.
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(smoothNormals(positions), 3));
   const surface = new THREE.Mesh(
     geo,
     new THREE.MeshStandardMaterial({
       vertexColors: true,
       roughness: 0.95,
       metalness: 0.0,
-      flatShading: true,
-      side: THREE.DoubleSide, // fan winding yields downward normals; light both faces
+      side: THREE.DoubleSide,
     }),
   );
   group.add(surface);
