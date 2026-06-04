@@ -31,8 +31,19 @@ export interface CharacterDef {
 
 export const FOUNDRY: ThemeDef = {
   name: "Foundry",
-  chunks: ["open", "pillars", "barrier", "crates", "hazard", "elbow"],
-  openBias: 3,
+  chunks: [
+    "open",
+    "scatter",
+    "cover_pair",
+    "pillars",
+    "barrier",
+    "crates",
+    "hazard",
+    "elbow",
+    "bunker",
+    "corridor",
+  ],
+  openBias: 5,
   palette: {
     sky: 0x0b0d12,
     fog: 0x0b0d12,
