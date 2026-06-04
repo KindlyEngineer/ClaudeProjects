@@ -204,7 +204,9 @@ const ROLE: Record<UnitClass, RoleProfile> = {
   armor: { weights: { objective: 2, seize: 25, attack: 4, exposure: -1.0, cover: 0.8, standoff: 0.8, supply: 1.5, mutual: 0.6 }, idealRange: 9, action: "fire" },
   infantry: { weights: { objective: 1.5, seize: 25, attack: 3, exposure: -1.6, cover: 1.6, supply: 0.8, mutual: 1.0 }, idealRange: 2, action: "fire" },
   engineer: { weights: { objective: 1.5, attack: 2, exposure: -1.6, cover: 1.4, supply: 0.8, mutual: 1.0 }, idealRange: 2, action: "fire" },
-  supply: { weights: { objective: 0.3, exposure: -3.2, nearNeedy: 2.5, supply: 1.0, mutual: 0.6 }, idealRange: 0, action: "resupply" },
+  // Supply must keep up with the spearhead to sustain it (cautious, but it can't
+  // hang back so far the advance runs dry).
+  supply: { weights: { objective: 1.3, exposure: -1.2, nearNeedy: 3, supply: 1.0, mutual: 0.6 }, idealRange: 0, action: "resupply" },
 };
 
 function needsSupply(u: UnitInstance): boolean {
@@ -260,7 +262,7 @@ export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): U
     believedHexes: believed.map((e) => e.hex),
     friendHexes: livingUnits(state, side).filter((u) => u.id !== unit.id).map((u) => u.hex),
     goal,
-    allowSeize: !task, // only the objective-seeking attacker takes the zone
+    allowSeize: side === state.objective.attacker, // only the attacker takes the zone
     zone,
     zoneKeys: new Set(zone.map(hexKey)),
     supplyPts: supplySources(state, side),
@@ -325,8 +327,9 @@ function describe(
     const t = ctx.visible.find((e) => e.id === x.fireTargetId);
     return t ? unitType(t.typeId).name : "the enemy";
   };
-  // A unit under a defensive task reports what the plan has it doing.
-  if (task) {
+  // A DEFENSIVE task reports what the plan has the unit doing; an "advance" task
+  // (the attacker's chosen axis) falls through to the objective-seeking logic.
+  if (task && task.kind !== "advance") {
     switch (task.kind) {
       case "probe":
         return { stance: "scout", intent: x.fireTargetId !== null ? `Probing — contact with ${tgtName()}` : "Probing forward to gain contact" };
@@ -367,14 +370,41 @@ function describe(
 
 // ── Execution ────────────────────────────────────────────────────────────────
 
-function doFire(state: GameState, unit: UnitInstance): void {
-  // Pick the best worthwhile (weapon, target) from the unit's current hex.
-  const visible = visibleSightings(state, unit.side);
+/** The force's priority target: the most dangerous enemy currently in sight, so
+ *  units CONCENTRATE fire on it (coordination) rather than each plinking its own
+ *  local best — concentration is what actually breaks a defender. */
+function forcePriority(state: GameState, side: Side): UnitInstance | null {
+  let best: UnitInstance | null = null;
+  let bestThreat = -1;
+  for (const s of visibleSightings(state, side)) {
+    const live = state.units.find((u) => u.id === s.id && u.structure > 0);
+    if (!live) continue;
+    const w = unitType(live.typeId).weapons[0];
+    const threat = (w ? w.damage * w.accuracy : 0) * (live.crits.includes("shaken") ? 0.2 : 1);
+    if (threat > bestThreat) {
+      bestThreat = threat;
+      best = live;
+    }
+  }
+  return best;
+}
+
+function doFire(state: GameState, unit: UnitInstance, priority: UnitInstance | null): void {
   const weapons = unitType(unit.typeId).weapons;
+  // Concentrate on the force priority if this unit can meaningfully hit it.
+  if (priority && priority.structure > 0) {
+    for (let wi = 0; wi < weapons.length; wi++) {
+      if (canAttack(state, unit, wi, priority) && shotValue(unit, unit.hex, priority) > 0) {
+        attackUnit(state, unit, wi, priority);
+        return;
+      }
+    }
+  }
+  // Otherwise the best worthwhile shot available to this unit.
   let bestTarget: UnitInstance | null = null;
   let bestWeapon = 0;
   let bestV = 0;
-  for (const s of visible) {
+  for (const s of visibleSightings(state, unit.side)) {
     const live = state.units.find((u) => u.id === s.id && u.structure > 0);
     if (!live) continue;
     for (let wi = 0; wi < weapons.length; wi++) {
@@ -408,7 +438,8 @@ export function commandForce(state: GameState, side: Side): void {
     state.intents[unit.id] = decision.intent;
     if (decision.path.length) moveUnit(state, unit, decision.path);
     const action = ROLE[unitType(unit.typeId).cls].action;
-    if (action === "fire") doFire(state, unit);
+    // Recompute the priority after the move so concentration tracks the field.
+    if (action === "fire") doFire(state, unit, forcePriority(state, side));
     else if (action === "resupply") doResupply(state, unit);
   }
 }

@@ -3,6 +3,7 @@ import { terrain } from "../data/terrain";
 import type { Side } from "../data/types";
 import { unitType } from "../data/units";
 import { hexDistance, hexKey, type Hex } from "./hex";
+import { believedEnemies } from "./knowledge";
 import { livingUnits, type GameState } from "./state";
 
 // Force-level planning. Before units act, the AI forms a plan for its side and
@@ -13,7 +14,7 @@ import { livingUnits, type GameState } from "./state";
 // variety comes from seeded "AI noise", so the same seed replays identically
 // (self-play/tests hold) while no two seeds — and few turns — play the same way.
 
-export type TaskKind = "hold" | "screen" | "rove" | "rear" | "probe" | "counter";
+export type TaskKind = "hold" | "screen" | "rove" | "rear" | "probe" | "counter" | "advance";
 
 export interface Task {
   goalHex: Hex;
@@ -54,9 +55,48 @@ function passable(state: GameState, h: Hex): boolean {
 
 /** Build the side's plan. The attacker keeps default goals (objective-seeking,
  *  handled by the unit AI); the defender is positioned deliberately. */
+/** The zone hex least covered by perceived defenders — the attacker's weak point
+ *  to maneuver against. Recomputed from belief each turn, so the axis SHIFTS if
+ *  the defence repositions to cover it. */
+export function leastDefendedZoneHex(state: GameState, side: Side): Hex {
+  const believed = believedEnemies(state, side);
+  const zone = state.objective.zone;
+  let best = zone[0] ?? { q: 0, r: 0 };
+  let bestDef = Infinity;
+  for (const z of zone) {
+    let def = 0;
+    for (const e of believed) {
+      const w = unitType(e.typeId).weapons[0];
+      if (w && hexDistance(e.hex, z) <= w.rangeMax) def += w.damage * w.accuracy;
+    }
+    if (def < bestDef || (def === bestDef && hexKey(z) < hexKey(best))) {
+      bestDef = def;
+      best = z;
+    }
+  }
+  return best;
+}
+
 export function planForce(state: GameState, side: Side): ForcePlan {
   const tasks = new Map<number, Task>();
-  if (side === state.objective.attacker) return { tasks }; // attacker: AI-2 objective-seeking
+  if (side === state.objective.attacker) {
+    // Attacker: maneuver elements push the perceived weak point (adaptive — the
+    // axis shifts as the defence moves); fire support, recon and supply keep
+    // their roles (shell from range, scout, sustain). Units still seize any hex.
+    const axis = leastDefendedZoneHex(state, side);
+    for (const u of livingUnits(state, side)) {
+      if (u.controller !== "ai") continue;
+      const cls = unitType(u.typeId).cls;
+      if (cls === "mech" || cls === "armor" || cls === "infantry" || cls === "engineer") {
+        tasks.set(u.id, { goalHex: axis, kind: "advance" }); // commit to the axis
+      } else if (cls === "recon") {
+        tasks.set(u.id, { goalHex: axis, kind: "probe" }); // scout the weak point
+      }
+      // artillery / supply: no task — their role behaviour (standoff fire,
+      // sustainment) is already right.
+    }
+    return { tasks };
+  }
 
   const zone = state.objective.zone;
   const obj = centroid(zone);

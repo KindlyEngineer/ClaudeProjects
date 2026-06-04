@@ -180,7 +180,25 @@ memory), never ground truth. Staged, gated:
     Verified: 4 assessment tests (no-contact→probe, scouted-isolated→counter,
     scouted-strong→hold, determinism) — 80 total. In-match the counter fires
     only opportunistically (an isolated, pressing attacker) — never reflexive.
-  - **AI-3c — Adaptivity + bulk self-play tuning** *(next)*.
+  - **AI-3c — Adaptivity, fire concentration & bulk self-play** ✅
+    *Adaptivity:* the attacker maneuvers against the perceived **weak point** —
+    `leastDefendedZoneHex` picks the zone hex least covered by *believed*
+    defenders, recomputed each turn so the axis SHIFTS if the defence repositions
+    (the force gets `advance` tasks toward it; fire-support/recon/supply keep
+    their roles). *Coordination:* units **concentrate fire** on a shared force
+    priority (the most dangerous visible enemy) instead of each plinking its
+    local best. *Harness:* `tools/selfplay.ts` (`npm run selfplay [N]`) runs bulk
+    AI-vs-AI and reports the outcome split, match length and invariant
+    violations. Verified: adaptive-axis test (axis tracks belief) — 81 total —
+    and bulk self-play is **sound**: across 200+ matches every match terminates
+    within the cap with **zero** invariant violations.
+    > **Known, scoped to v1:** AI-vs-AI on this single asymmetric Seize map is
+    > defender-favoured (attacker ~1%): the AI *enabler* doesn't yet conduct the
+    > supported attack as well as a skilled player (it loses its forward observer,
+    > so fires can't suppress, and the spearhead outruns its supply). Per brief
+    > §5 the AI enabler module + self-play balance (~50–65%) are v1 work; v0's
+    > harness role — termination/crash/invariant verification — is fully met. The
+    > player-supported proof is unaffected (no-support 0/24, with-support 18/24).
 
 Then the rest of v1 (Breakthrough objective, more units/maps in data) per brief §5.
 

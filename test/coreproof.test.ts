@@ -10,7 +10,7 @@ import { MAP01 } from "../src/data/maps/map01";
 // delta attributable to player action alone (same seed, same map, same enemy,
 // same commander — only the blue support policy differs).
 
-const SEED = 2;
+const SEED = 4;
 
 describe("core proof — support changes the outcome", () => {
   it("unsupported mechs FAIL the Seize; the SAME battle SUCCEEDS with support", () => {

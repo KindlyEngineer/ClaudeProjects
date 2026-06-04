@@ -10,6 +10,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 4173 --strictPort",
     "test": "vitest run",
+    "selfplay": "tsx tools/selfplay.ts",
     "screenshot": "vite build && tsx tools/screenshot.ts"
   },
   "dependencies": {
