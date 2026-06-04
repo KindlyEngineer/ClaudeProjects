@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createGame, livingUnits } from "../src/sim/state";
 import { attackerHoldsZone } from "../src/sim/objective";
-import { noSupport, playerSupport, redDefense, runMatch } from "../src/sim/match";
+import { noSupport, playerSupport, runMatch } from "../src/sim/match";
 import { MAP01 } from "../src/data/maps/map01";
 
 // THE CORE HYPOTHESIS (brief §4, criterion 1): a player controlling only support
@@ -15,12 +15,12 @@ const SEED = 1;
 describe("core proof — support changes the outcome", () => {
   it("unsupported mechs FAIL the Seize; the SAME battle SUCCEEDS with support", () => {
     const unsupported = createGame(MAP01, SEED);
-    const a = runMatch(unsupported, noSupport, redDefense);
+    const a = runMatch(unsupported, noSupport);
     expect(a.outcome).toBe("red"); // the mechs run dry / are stopped short
     expect(attackerHoldsZone(unsupported)).toBe(false);
 
     const supported = createGame(MAP01, SEED);
-    const b = runMatch(supported, playerSupport, redDefense);
+    const b = runMatch(supported, playerSupport);
     expect(b.outcome).toBe("blue"); // resupply + suppressive fire + recon get it there
     expect(attackerHoldsZone(supported)).toBe(true);
 
@@ -31,15 +31,15 @@ describe("core proof — support changes the outcome", () => {
   it("is deterministic — same seed + same support → same result", () => {
     const x = createGame(MAP01, SEED);
     const y = createGame(MAP01, SEED);
-    const rx = runMatch(x, playerSupport, redDefense);
-    const ry = runMatch(y, playerSupport, redDefense);
+    const rx = runMatch(x, playerSupport);
+    const ry = runMatch(y, playerSupport);
     expect(rx).toEqual(ry);
   });
 
   it("every match terminates decisively within the turn cap, supply never negative", () => {
     for (const policy of [noSupport, playerSupport]) {
       const s = createGame(MAP01, SEED);
-      const r = runMatch(s, policy, redDefense);
+      const r = runMatch(s, policy);
       expect(["blue", "red"]).toContain(r.outcome); // never hangs as "ongoing"
       expect(r.turns).toBeLessThanOrEqual(s.objective.turnLimit + 1);
       for (const u of livingUnits(s)) {
@@ -54,8 +54,8 @@ describe("core proof — support changes the outcome", () => {
     let noWins = 0;
     let withWins = 0;
     for (let seed = 1; seed <= 12; seed++) {
-      if (runMatch(createGame(MAP01, seed), noSupport, redDefense).outcome === "blue") noWins++;
-      if (runMatch(createGame(MAP01, seed), playerSupport, redDefense).outcome === "blue") withWins++;
+      if (runMatch(createGame(MAP01, seed), noSupport).outcome === "blue") noWins++;
+      if (runMatch(createGame(MAP01, seed), playerSupport).outcome === "blue") withWins++;
     }
     expect(noWins).toBe(0); // the mechs never seize unaided
     expect(withWins).toBeGreaterThanOrEqual(9); // and usually do with support

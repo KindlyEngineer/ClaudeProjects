@@ -129,14 +129,29 @@ memory), never ground truth. Staged, gated:
   (`data/maps`); v0 keeps the brief's split (blue mech AI, blue support player,
   red all AI). Verified: 4 belief/controller tests (70 total); the core proof
   still holds (0/20 unaided, 16/20 with support).
-- **AI-2 — Role-aware force AI** *(next)*
-  Generalize `commandMechs` → `commandForce(side)` driving every `ai` unit by
-  role: recon scouts/keeps standoff, artillery suppresses from range, armour
-  seeks flanks, infantry holds cover, supply sustains, mech spearheads — with
-  capability/limitation soundness (penetration-aware targeting → no futile shots;
-  correct standoff; crit/ammo/fuel/supply awareness; hazard avoidance). Rewire
-  the match to controller-based; retire the scripted red policy. Soundness
-  encoded as self-play invariants.
+- **AI-2 — Role-aware force AI** ✅
+  One AI (`sim/ai.ts`) — `commandForce(side)` — drives every `ai` unit by role on
+  an **extensible consideration scorer**: each factor (objective, seize, supply
+  pull, exposure, attack, cover, standoff, mutual-support, near-needy, …) is a
+  named function with a per-role weight, summed to pick a hex; adding a factor
+  (terrain/battlefield effects, ZOC) = add a consideration + weights, no rewrite.
+  Roles: recon scouts at standoff, artillery suppresses from range, armour/mech
+  seek **flanks**, infantry holds cover, supply sustains. **Capability/limitation
+  soundness:** `shotValue` only values shots that penetrate (flanks score higher)
+  or suppress — never futile ones; crits/ammo/fuel/supply respected; pathing
+  avoids impassable. The match is now controller-based (the scripted red policy
+  is retired — red is the AI). Verified: penetration/flank targeting test + an
+  AI-vs-AI **self-play** suite (both sides fully AI across 10 seeds: always
+  terminates, no negative resources) — 72 total — and the core proof is now
+  decisive (no-support **0/20**, with-support **20/20**, via focus-fire support).
+
+> **Deferred, seam-ready: a configurable LLM (e.g. DeepSeek) policy.** Not built —
+> it would break the deterministic/seedable/self-play foundation if placed in the
+> per-turn loop. The AI decision boundary (`decideUnit`) is the seam; an LLM fits
+> best as (1) offline dev tooling (scenario/balance generation, self-play log
+> analysis), (2) after-action narration, or (3) an opt-in non-reproducible policy
+> excluded from tests/self-play. Env-configured, network-allowlisted, with the
+> deterministic AI as fallback. Revisit when there's a concrete use.
 - **AI-3 — Coordinated + adaptive planning**
   A per-turn force plan from the belief — axis selection, role tasking, target
   deconfliction, mutual support — adapting to *known* enemy posture. Bulk

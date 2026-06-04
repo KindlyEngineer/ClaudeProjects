@@ -1,0 +1,358 @@
+import { clamp } from "../core/math";
+import { RULES } from "../data/rules";
+import type { Side, UnitClass } from "../data/types";
+import { unitType } from "../data/units";
+import { attackUnit, canAttack, moveUnit, resupplyUnit } from "./actions";
+import { armorArc, hexDistance, hexKey, type Hex } from "./hex";
+import { believedEnemies, visibleSightings } from "./knowledge";
+import { supplySources } from "./logistics";
+import { pathTo, reachable } from "./pathing";
+import { canMove, livingUnits, terrainAt, type GameState, type UnitInstance } from "./state";
+import { isEligible } from "./turn";
+import { isScouted } from "./vision";
+
+// The force AI: ONE capability-aware, fog-limited brain that commands whatever
+// units are assigned to it (controller === "ai"), each according to its role.
+// It is deterministic (no RNG) and inspectable. Action choice is a transparent
+// sum of named "considerations" weighted per role, so new factors (terrain
+// effects, battlefield effects, ZOC, …) slot in by adding a consideration + a
+// weight — no rewrite. It reasons only on BELIEF (current sight + remembered
+// last-known positions), never ground truth, and only fires on what it can see.
+
+// A minimal enemy view — satisfied by a live UnitInstance and a remembered
+// Sighting alike — so scoring runs on belief, not omniscience.
+interface EnemyView {
+  id: number;
+  typeId: string;
+  hex: Hex;
+  facing: number;
+  structure: number;
+  suppression: number;
+}
+
+export type Stance =
+  | "advance"
+  | "assault"
+  | "consolidate"
+  | "resupply"
+  | "hold"
+  | "immobilised"
+  | "scout"
+  | "suppress"
+  | "sustain"
+  | "screen";
+
+export interface UnitDecision {
+  unitId: number;
+  stance: Stance;
+  intent: string;
+  destination: Hex;
+  path: Hex[];
+  fireTargetId: number | null;
+}
+
+export interface Sustainment {
+  need: number; // 0..1 — how badly it needs to break contact and resupply
+  reason: string;
+}
+
+export function sustainmentNeed(unit: UnitInstance): Sustainment {
+  const t = unitType(unit.typeId);
+  const c = RULES.commander;
+  const ammoMax = t.weapons.reduce((s, w) => s + w.ammoMax, 0);
+  const ammoFrac = ammoMax ? unit.ammo.reduce((s, a) => s + a, 0) / ammoMax : 1;
+  const fuelFrac = t.fuelMax ? unit.fuel / t.fuelMax : 1;
+  const structFrac = unit.structure / t.structure;
+  const ammoNeed = clamp((c.ammoLow - ammoFrac) / c.ammoLow, 0, 1);
+  const fuelNeed = clamp((c.fuelLow - fuelFrac) / c.fuelLow, 0, 1);
+  const dmgNeed = clamp((c.structLow - structFrac) / c.structLow, 0, 1);
+  const need = Math.max(ammoNeed, fuelNeed, dmgNeed);
+  let reason = "";
+  if (need > 0) reason = need === ammoNeed ? "low ammo" : need === fuelNeed ? "low fuel" : "heavy damage";
+  return { need, reason };
+}
+
+function supportNear(state: GameState, side: Side, hex: Hex, selfId: number): number {
+  const r = RULES.commander.supportRadius;
+  return livingUnits(state, side).filter((u) => u.id !== selfId && hexDistance(u.hex, hex) <= r).length;
+}
+
+/** Incoming-fire exposure at a hex (reduced by enemy suppression, cover and
+ *  nearby support) plus a caution penalty for advancing into unscouted hexes. */
+export function exposureAt(state: GameState, side: Side, hex: Hex, enemies: readonly EnemyView[]): number {
+  const c = RULES.commander;
+  let threat = 0;
+  for (const e of enemies) {
+    const w = unitType(e.typeId).weapons[0];
+    if (!w) continue;
+    const d = hexDistance(e.hex, hex);
+    if (d <= w.rangeMax) {
+      const closeness = 0.25 + 0.75 * ((w.rangeMax - d) / w.rangeMax);
+      const suppFactor = clamp(1 - e.suppression / RULES.suppressionBreak, 0.2, 1);
+      threat += w.damage * w.accuracy * suppFactor * closeness;
+    }
+  }
+  const cover = terrainAt(state, hex)?.cover ?? 0;
+  threat *= clamp(1 - cover * c.coverExposureReduction, 0.2, 1);
+  threat *= clamp(1 - supportNear(state, side, hex, -1) * c.supportReduction, 0.3, 1);
+  if (!isScouted(state, side, hex)) threat += c.fogCaution;
+  return threat;
+}
+
+/** Capability-aware value of a shot from `fromHex` at `target`: penetrating hits
+ *  on the arc we'd actually strike score by the target's weakness (and FLANK
+ *  shots score higher); a shot that can't penetrate is worth only its
+ *  suppression; a shot that can neither penetrate nor suppress is worthless (0)
+ *  — so the AI never takes futile shots. */
+function shotValue(attacker: UnitInstance, fromHex: Hex, target: EnemyView): number {
+  const ttype = unitType(target.typeId);
+  let best = 0;
+  for (const w of unitType(attacker.typeId).weapons) {
+    const d = hexDistance(fromHex, target.hex);
+    if (d < w.rangeMin || d > w.rangeMax) continue;
+    const arc = armorArc(target.hex, target.facing as 0 | 1 | 2 | 3 | 4 | 5, fromHex);
+    const weakness = 1 - target.structure / ttype.structure + target.suppression / RULES.suppressionBreak;
+    let v = 0;
+    if (w.penetration >= ttype.armor[arc]) {
+      v = (1 + weakness) * (arc === "rear" ? 1.35 : arc === "side" ? 1.15 : 1.0); // reward flanks
+    } else if (w.suppression > 0) {
+      v = 0.25 * (w.suppression / 6); // can't kill it, but can pin it
+    }
+    best = Math.max(best, v);
+  }
+  return best;
+}
+
+function bestShotValue(attacker: UnitInstance, hex: Hex, targets: readonly EnemyView[]): number {
+  let best = 0;
+  for (const t of targets) best = Math.max(best, shotValue(attacker, hex, t));
+  return best;
+}
+
+function nearestDist(hex: Hex, points: readonly Hex[]): number {
+  let m = Infinity;
+  for (const p of points) m = Math.min(m, hexDistance(hex, p));
+  return Number.isFinite(m) ? m : 0;
+}
+
+// ── The consideration framework ──────────────────────────────────────────────
+// Each consideration returns a raw (unweighted) value for a candidate hex; the
+// role's weight scales it. Add a factor here + give roles a weight to use it.
+
+interface AiContext {
+  state: GameState;
+  side: Side;
+  unit: UnitInstance;
+  believed: EnemyView[];
+  visible: EnemyView[];
+  believedHexes: Hex[];
+  friendHexes: Hex[];
+  zone: readonly Hex[];
+  zoneKeys: Set<string>;
+  supplyPts: Hex[];
+  needyHexes: Hex[];
+  need: Sustainment;
+  dObjFrom: number;
+  dSupFrom: number;
+  idealRange: number;
+}
+
+type ConsiderationName =
+  | "objective"
+  | "seize"
+  | "supply"
+  | "exposure"
+  | "attack"
+  | "cover"
+  | "standoff"
+  | "mutual"
+  | "nearNeedy";
+
+const CONSIDERATIONS: Record<ConsiderationName, (ctx: AiContext, h: Hex) => number> = {
+  objective: (ctx, h) => ctx.dObjFrom - nearestDist(h, ctx.zone),
+  seize: (ctx, h) => (ctx.zoneKeys.has(hexKey(h)) ? 1 : 0),
+  supply: (ctx, h) => ctx.need.need * (ctx.dSupFrom - nearestDist(h, ctx.supplyPts)),
+  exposure: (ctx, h) => exposureAt(ctx.state, ctx.side, h, ctx.believed),
+  attack: (ctx, h) => bestShotValue(ctx.unit, h, ctx.visible),
+  cover: (ctx, h) => terrainAt(ctx.state, h)?.cover ?? 0,
+  standoff: (ctx, h) => (ctx.believedHexes.length ? -Math.abs(nearestDist(h, ctx.believedHexes) - ctx.idealRange) : 0),
+  // Isolation penalty: 0 while a friendly is within support range, growing
+  // negative beyond it — discourages racing ahead of the force without stalling
+  // an advance (it doesn't reward bunching up).
+  mutual: (ctx, h) =>
+    ctx.friendHexes.length ? -Math.max(0, nearestDist(h, ctx.friendHexes) - RULES.commander.supportRadius) : 0,
+  nearNeedy: (ctx, h) => (ctx.needyHexes.length ? -nearestDist(h, ctx.needyHexes) : 0),
+};
+
+interface RoleProfile {
+  weights: Partial<Record<ConsiderationName, number>>;
+  idealRange: number;
+  action: "fire" | "resupply" | "none";
+}
+
+const W = RULES.commander;
+const ROLE: Record<UnitClass, RoleProfile> = {
+  // The spearhead: pulled to the objective/seize, but it advances WITH its
+  // escort (mutual) rather than soloing into the defence, and breaks contact
+  // when its sustainment runs low (supply × need).
+  mech: { weights: { objective: W.wObjective, seize: W.wSeize, supply: W.wSupply, exposure: -W.wThreat, attack: W.wAttack }, idealRange: 0, action: "fire" },
+  recon: { weights: { objective: 1.2, exposure: -2.6, standoff: 1.6, cover: 0.6, supply: 0.5, mutual: 0.4 }, idealRange: 9, action: "fire" },
+  artillery: { weights: { objective: 0.2, exposure: -3.0, standoff: 2.2, cover: 0.5, supply: 0.6, mutual: 0.4 }, idealRange: 12, action: "fire" },
+  armor: { weights: { objective: 2, seize: 25, attack: 4, exposure: -1.0, cover: 0.8, standoff: 0.8, supply: 1.5, mutual: 0.6 }, idealRange: 9, action: "fire" },
+  infantry: { weights: { objective: 1.5, seize: 25, attack: 3, exposure: -1.6, cover: 1.6, supply: 0.8, mutual: 1.0 }, idealRange: 2, action: "fire" },
+  engineer: { weights: { objective: 1.5, attack: 2, exposure: -1.6, cover: 1.4, supply: 0.8, mutual: 1.0 }, idealRange: 2, action: "fire" },
+  supply: { weights: { objective: 0.3, exposure: -3.2, nearNeedy: 2.5, supply: 1.0, mutual: 0.6 }, idealRange: 0, action: "resupply" },
+};
+
+function needsSupply(u: UnitInstance): boolean {
+  const t = unitType(u.typeId);
+  return u.fuel < t.fuelMax * 0.6 || u.ammo.some((a, i) => a < t.weapons[i].ammoMax);
+}
+
+/** Decide one unit's move this turn (pure — no mutation), scoring reachable
+ *  hexes by its role's weighted considerations. */
+export function decideUnit(state: GameState, unit: UnitInstance): UnitDecision {
+  const side = unit.side;
+  const cls = unitType(unit.typeId).cls;
+  const role = ROLE[cls];
+  const believed = believedEnemies(state, side);
+  const visible = visibleSightings(state, side);
+  const zone = state.objective.zone;
+  const ctx: AiContext = {
+    state,
+    side,
+    unit,
+    believed,
+    visible,
+    believedHexes: believed.map((e) => e.hex),
+    friendHexes: livingUnits(state, side).filter((u) => u.id !== unit.id).map((u) => u.hex),
+    zone,
+    zoneKeys: new Set(zone.map(hexKey)),
+    supplyPts: supplySources(state, side),
+    needyHexes: livingUnits(state, side).filter((u) => u.id !== unit.id && needsSupply(u)).map((u) => u.hex),
+    need: sustainmentNeed(unit),
+    dObjFrom: nearestDist(unit.hex, zone),
+    dSupFrom: nearestDist(unit.hex, supplySources(state, side)),
+    idealRange: role.idealRange,
+  };
+
+  const entries = Object.entries(role.weights) as Array<[ConsiderationName, number]>;
+  const score = (h: Hex): number => {
+    let s = 0;
+    for (const [name, w] of entries) s += w * CONSIDERATIONS[name](ctx, h);
+    return s;
+  };
+
+  const mobile = canMove(unit);
+  const reach = reachable(state, unit);
+  let bestKey = hexKey(unit.hex);
+  let bestHex = unit.hex;
+  let bestScore = mobile ? -Infinity : score(unit.hex);
+  if (mobile) {
+    for (const [k, node] of reach) {
+      const s = score(node.hex);
+      if (s > bestScore || (s === bestScore && k < bestKey)) {
+        bestScore = s;
+        bestKey = k;
+        bestHex = node.hex;
+      }
+    }
+  }
+
+  const path = mobile ? pathTo(reach, bestKey) : [];
+  const fireTargetId = pickTarget(unit, bestHex, visible);
+  const objGain = ctx.dObjFrom - nearestDist(bestHex, zone);
+  const { stance, intent } = describe(cls, ctx, { objGain, exposed: exposureAt(state, side, bestHex, believed), fireTargetId, mobile });
+  return { unitId: unit.id, stance, intent, destination: bestHex, path, fireTargetId };
+}
+
+/** The most valuable non-futile target visible from `hex`, or null. */
+function pickTarget(attacker: UnitInstance, hex: Hex, visible: readonly EnemyView[]): number | null {
+  let best: EnemyView | null = null;
+  let bestV = 0;
+  for (const t of visible) {
+    const v = shotValue(attacker, hex, t);
+    if (v > bestV) {
+      bestV = v;
+      best = t;
+    }
+  }
+  return best?.id ?? null;
+}
+
+function describe(
+  cls: UnitClass,
+  ctx: AiContext,
+  x: { objGain: number; exposed: number; fireTargetId: number | null; mobile: boolean },
+): { stance: Stance; intent: string } {
+  const tgtName = () => {
+    const t = ctx.visible.find((e) => e.id === x.fireTargetId);
+    return t ? unitType(t.typeId).name : "the enemy";
+  };
+  if (cls === "mech") {
+    if (!x.mobile) return { stance: "immobilised", intent: x.fireTargetId !== null ? "Immobilised — holding and returning fire" : "Immobilised — stranded, awaiting recovery" };
+    if (ctx.need.need >= W.needTrigger && x.objGain <= 0) return { stance: "resupply", intent: `Breaking contact to resupply (${ctx.need.reason || "sustainment"})` };
+    if (ctx.dObjFrom === 0 && x.objGain <= 0) return { stance: "hold", intent: "Holding the objective" };
+    if (x.objGain > 0) return { stance: "advance", intent: "Advancing on the objective" };
+    if (x.fireTargetId !== null) return { stance: "assault", intent: `Pressing the assault on ${tgtName()}` };
+    return { stance: "consolidate", intent: ctx.believed.length > 0 ? "Consolidating — axis too exposed" : "Holding — awaiting reconnaissance" };
+  }
+  switch (cls) {
+    case "recon":
+      return { stance: "scout", intent: ctx.believed.length ? "Scouting — eyes on the enemy" : "Scouting the approach" };
+    case "artillery":
+      return { stance: "suppress", intent: x.fireTargetId !== null ? `Suppressing ${tgtName()}` : "In battery — awaiting a fire mission" };
+    case "supply":
+      return { stance: "sustain", intent: ctx.needyHexes.length ? "Moving up to sustain the advance" : "Shadowing the spearhead" };
+    default:
+      if (x.objGain > 0) return { stance: "screen", intent: "Advancing in support" };
+      if (x.fireTargetId !== null) return { stance: "assault", intent: `Engaging ${tgtName()}` };
+      return { stance: "screen", intent: "Holding the line" };
+  }
+}
+
+// ── Execution ────────────────────────────────────────────────────────────────
+
+function doFire(state: GameState, unit: UnitInstance): void {
+  // Pick the best worthwhile (weapon, target) from the unit's current hex.
+  const visible = visibleSightings(state, unit.side);
+  const weapons = unitType(unit.typeId).weapons;
+  let bestTarget: UnitInstance | null = null;
+  let bestWeapon = 0;
+  let bestV = 0;
+  for (const s of visible) {
+    const live = state.units.find((u) => u.id === s.id && u.structure > 0);
+    if (!live) continue;
+    for (let wi = 0; wi < weapons.length; wi++) {
+      if (!canAttack(state, unit, wi, live)) continue;
+      const v = shotValue(unit, unit.hex, live);
+      if (v > bestV) {
+        bestV = v;
+        bestTarget = live;
+        bestWeapon = wi;
+      }
+    }
+  }
+  if (bestTarget && bestV > 0) attackUnit(state, unit, bestWeapon, bestTarget);
+}
+
+function doResupply(state: GameState, unit: UnitInstance): void {
+  // Resupply the neediest adjacent friendly (favour the spearhead — the mech).
+  const adj = livingUnits(state, unit.side)
+    .filter((t) => t.id !== unit.id && hexDistance(unit.hex, t.hex) === 1 && needsSupply(t))
+    .sort((a, b) => (unitType(b.typeId).cls === "mech" ? 1 : 0) - (unitType(a.typeId).cls === "mech" ? 1 : 0));
+  if (adj[0]) resupplyUnit(state, unit, adj[0]);
+}
+
+/** Decide + execute every eligible AI-controlled unit of a side. */
+export function commandForce(state: GameState, side: Side): void {
+  for (const unit of livingUnits(state, side)) {
+    if (unit.controller !== "ai" || !isEligible(state, unit)) continue;
+    const decision = decideUnit(state, unit);
+    state.intents[unit.id] = decision.intent;
+    if (decision.path.length) moveUnit(state, unit, decision.path);
+    const action = ROLE[unitType(unit.typeId).cls].action;
+    if (action === "fire") doFire(state, unit);
+    else if (action === "resupply") doResupply(state, unit);
+  }
+}

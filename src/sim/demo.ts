@@ -1,7 +1,7 @@
 import { unitType } from "../data/units";
 import { resupplyUnit } from "./actions";
 import { fireBest, nearestEnemyHex, stepToward } from "./aiutil";
-import { commandMechs } from "./commander";
+import { commandForce } from "./ai";
 import { hexDistance, type Hex } from "./hex";
 import { livingUnits, type GameState, type UnitInstance } from "./state";
 import { beginTurn, nextPhase } from "./turn";
@@ -39,12 +39,12 @@ export function scriptedSkirmish(state: GameState, turns = 6): void {
   beginTurn(state);
   const objectiveHex = state.objective.zone[0] ?? { q: 0, r: 0 };
   for (let step = 0; step < turns * 3; step++) {
-    // Support/logistics (the player's stand-in) is scripted; the mechs are the AI.
+    // Player-controlled units are scripted here; every AI unit is the force AI.
     for (const u of livingUnits(state)) {
-      if (unitType(u.typeId).cls !== "mech") actUnit(state, u, objectiveHex);
+      if (u.controller === "player") actUnit(state, u, objectiveHex);
     }
-    commandMechs(state, "blue");
-    commandMechs(state, "red");
+    commandForce(state, "blue");
+    commandForce(state, "red");
     nextPhase(state);
   }
 }

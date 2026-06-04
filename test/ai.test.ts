@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideMech, exposureAt, sustainmentNeed } from "../src/sim/commander";
+import { decideUnit, exposureAt, sustainmentNeed } from "../src/sim/ai";
 import { updateBelief } from "../src/sim/knowledge";
 import { hexDistance } from "../src/sim/hex";
 import type { ObjectiveDef } from "../src/data/types";
@@ -24,7 +24,7 @@ describe("mech commander — objective & sustainment", () => {
   it("a healthy mech with a clear field advances on the objective", () => {
     const s = openGame({ w: 26, h: 9, objective, units: [place("mech_assault", "blue", axial(4, 4))] });
     const mech = find(s, "mech_assault");
-    const d = decideMech(s, mech);
+    const d = decideUnit(s, mech);
     expect(d.stance).toBe("advance");
     expect(hexDistance(d.destination, OBJ)).toBeLessThan(hexDistance(mech.hex, OBJ));
     expect(d.intent).toMatch(/advanc/i);
@@ -39,7 +39,7 @@ describe("mech commander — objective & sustainment", () => {
     });
     const mech = find(s, "mech_assault");
     mech.ammo = mech.ammo.map(() => 0);
-    const d = decideMech(s, mech);
+    const d = decideUnit(s, mech);
     expect(d.stance).toBe("resupply");
     expect(d.intent).toMatch(/resupply.*ammo/i);
     // It moves back toward the supply line, not on toward the objective.
@@ -50,7 +50,7 @@ describe("mech commander — objective & sustainment", () => {
     const s = openGame({ w: 26, h: 9, objective, units: [place("mech_assault", "blue", axial(8, 4))] });
     const mech = find(s, "mech_assault");
     mech.crits.push("mobility");
-    const d = decideMech(s, mech);
+    const d = decideUnit(s, mech);
     expect(d.stance).toBe("immobilised");
     expect(d.path).toHaveLength(0);
     expect(d.intent).toMatch(/immobilised/i);
@@ -100,7 +100,7 @@ describe("mech commander — vision gating of targets", () => {
     updateBelief(blind, "blue"); // the side forms its picture from what it can see
     const mechBlind = find(blind, "mech_assault");
     // The enemy is within the autocannon's range but beyond the mech's own sight.
-    expect(decideMech(blind, mechBlind).fireTargetId).toBeNull();
+    expect(decideUnit(blind, mechBlind).fireTargetId).toBeNull();
 
     // Drop a recon where it can see the enemy.
     const withRecon = openGame({
@@ -116,7 +116,27 @@ describe("mech commander — vision gating of targets", () => {
     updateBelief(withRecon, "blue"); // recon now contributes to the picture
     const mechSeen = find(withRecon, "mech_assault");
     const enemy = find(withRecon, "infantry", "red");
-    expect(decideMech(withRecon, mechSeen).fireTargetId).toBe(enemy.id);
+    expect(decideUnit(withRecon, mechSeen).fireTargetId).toBe(enemy.id);
+  });
+});
+
+describe("capability-aware targeting (soundness)", () => {
+  it("targets an enemy it can penetrate (the exposed rear) over one it would only bounce off", () => {
+    const s = openGame({
+      w: 14,
+      h: 8,
+      objective,
+      units: [
+        place("mech_assault", "blue", axial(5, 3), 0),
+        place("mech_assault", "red", axial(8, 3), 3), // faces blue → blue strikes its FRONT (bounce)
+        place("mech_assault", "red", axial(8, 5), 0), // faces away → blue strikes its REAR (penetrates)
+      ],
+    });
+    const blue = find(s, "mech_assault", "blue");
+    blue.crits.push("mobility"); // pin it so the choice is pure target selection
+    updateBelief(s, "blue");
+    const rear = s.units.find((u) => u.side === "red" && u.hex.q === axial(8, 5).q && u.hex.r === axial(8, 5).r)!;
+    expect(decideUnit(s, blue).fireTargetId).toBe(rear.id);
   });
 });
 
@@ -129,6 +149,6 @@ describe("mech commander — determinism", () => {
       units: [place("mech_assault", "blue", axial(6, 4)), place("armor", "red", axial(14, 4))],
     });
     const mech = find(s, "mech_assault");
-    expect(decideMech(s, mech)).toEqual(decideMech(s, mech));
+    expect(decideUnit(s, mech)).toEqual(decideUnit(s, mech));
   });
 });
