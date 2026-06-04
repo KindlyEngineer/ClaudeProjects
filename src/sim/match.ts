@@ -121,6 +121,6 @@ export const playerSupport: PlayerPolicy = (state) => {
       continue;
     }
     stepToward(state, u, obj, 3);
-    fireBest(state, u);
+    focusFire(state, u); // armour/infantry concentrate on the dangerous defender too
   }
 };

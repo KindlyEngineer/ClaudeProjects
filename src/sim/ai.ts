@@ -10,6 +10,7 @@ import { pathTo, reachable } from "./pathing";
 import { canMove, livingUnits, terrainAt, type GameState, type UnitInstance } from "./state";
 import { isEligible } from "./turn";
 import { isScouted } from "./vision";
+import { planForce, type Task } from "./plan";
 
 // The force AI: ONE capability-aware, fog-limited brain that commands whatever
 // units are assigned to it (controller === "ai"), each according to its role.
@@ -147,6 +148,8 @@ interface AiContext {
   visible: EnemyView[];
   believedHexes: Hex[];
   friendHexes: Hex[];
+  goal: readonly Hex[]; // where this unit is trying to be (zone, or an assigned task hex)
+  allowSeize: boolean; // only the attacker scores the seize bonus
   zone: readonly Hex[];
   zoneKeys: Set<string>;
   supplyPts: Hex[];
@@ -169,8 +172,8 @@ type ConsiderationName =
   | "nearNeedy";
 
 const CONSIDERATIONS: Record<ConsiderationName, (ctx: AiContext, h: Hex) => number> = {
-  objective: (ctx, h) => ctx.dObjFrom - nearestDist(h, ctx.zone),
-  seize: (ctx, h) => (ctx.zoneKeys.has(hexKey(h)) ? 1 : 0),
+  objective: (ctx, h) => ctx.dObjFrom - nearestDist(h, ctx.goal),
+  seize: (ctx, h) => (ctx.allowSeize && ctx.zoneKeys.has(hexKey(h)) ? 1 : 0),
   supply: (ctx, h) => ctx.need.need * (ctx.dSupFrom - nearestDist(h, ctx.supplyPts)),
   exposure: (ctx, h) => exposureAt(ctx.state, ctx.side, h, ctx.believed),
   attack: (ctx, h) => bestShotValue(ctx.unit, h, ctx.visible),
@@ -211,13 +214,14 @@ function needsSupply(u: UnitInstance): boolean {
 
 /** Decide one unit's move this turn (pure — no mutation), scoring reachable
  *  hexes by its role's weighted considerations. */
-export function decideUnit(state: GameState, unit: UnitInstance): UnitDecision {
+export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): UnitDecision {
   const side = unit.side;
   const cls = unitType(unit.typeId).cls;
   const role = ROLE[cls];
   const believed = believedEnemies(state, side);
   const visible = visibleSightings(state, side);
   const zone = state.objective.zone;
+  const goal = task ? [task.goalHex] : zone; // an assigned position, or the objective
   const ctx: AiContext = {
     state,
     side,
@@ -226,12 +230,14 @@ export function decideUnit(state: GameState, unit: UnitInstance): UnitDecision {
     visible,
     believedHexes: believed.map((e) => e.hex),
     friendHexes: livingUnits(state, side).filter((u) => u.id !== unit.id).map((u) => u.hex),
+    goal,
+    allowSeize: !task, // only the objective-seeking attacker takes the zone
     zone,
     zoneKeys: new Set(zone.map(hexKey)),
     supplyPts: supplySources(state, side),
     needyHexes: livingUnits(state, side).filter((u) => u.id !== unit.id && needsSupply(u)).map((u) => u.hex),
     need: sustainmentNeed(unit),
-    dObjFrom: nearestDist(unit.hex, zone),
+    dObjFrom: nearestDist(unit.hex, goal),
     dSupFrom: nearestDist(unit.hex, supplySources(state, side)),
     idealRange: role.idealRange,
   };
@@ -261,8 +267,8 @@ export function decideUnit(state: GameState, unit: UnitInstance): UnitDecision {
 
   const path = mobile ? pathTo(reach, bestKey) : [];
   const fireTargetId = pickTarget(unit, bestHex, visible);
-  const objGain = ctx.dObjFrom - nearestDist(bestHex, zone);
-  const { stance, intent } = describe(cls, ctx, { objGain, exposed: exposureAt(state, side, bestHex, believed), fireTargetId, mobile });
+  const objGain = ctx.dObjFrom - nearestDist(bestHex, goal);
+  const { stance, intent } = describe(cls, ctx, { objGain, exposed: exposureAt(state, side, bestHex, believed), fireTargetId, mobile }, task);
   return { unitId: unit.id, stance, intent, destination: bestHex, path, fireTargetId };
 }
 
@@ -284,11 +290,26 @@ function describe(
   cls: UnitClass,
   ctx: AiContext,
   x: { objGain: number; exposed: number; fireTargetId: number | null; mobile: boolean },
+  task?: Task,
 ): { stance: Stance; intent: string } {
   const tgtName = () => {
     const t = ctx.visible.find((e) => e.id === x.fireTargetId);
     return t ? unitType(t.typeId).name : "the enemy";
   };
+  // A unit under a defensive task reports what the plan has it doing.
+  if (task) {
+    switch (task.kind) {
+      case "screen":
+        return { stance: "screen", intent: x.fireTargetId !== null ? `Screening — engaging ${tgtName()}` : "Screening the approach" };
+      case "rove":
+        return { stance: "screen", intent: x.fireTargetId !== null ? `Manoeuvring — engaging ${tgtName()}` : "Manoeuvring to better ground" };
+      case "rear":
+        return { stance: "sustain", intent: "Holding the rear" };
+      case "hold":
+      default:
+        return { stance: "hold", intent: x.fireTargetId !== null ? `Holding — engaging ${tgtName()}` : "Holding a prepared position" };
+    }
+  }
   if (cls === "mech") {
     if (!x.mobile) return { stance: "immobilised", intent: x.fireTargetId !== null ? "Immobilised — holding and returning fire" : "Immobilised — stranded, awaiting recovery" };
     if (ctx.need.need >= W.needTrigger && x.objGain <= 0) return { stance: "resupply", intent: `Breaking contact to resupply (${ctx.need.reason || "sustainment"})` };
@@ -344,11 +365,13 @@ function doResupply(state: GameState, unit: UnitInstance): void {
   if (adj[0]) resupplyUnit(state, unit, adj[0]);
 }
 
-/** Decide + execute every eligible AI-controlled unit of a side. */
+/** Decide + execute every eligible AI-controlled unit of a side, under a
+ *  seeded force plan (varied, deterministic positioning + posture). */
 export function commandForce(state: GameState, side: Side): void {
+  const plan = planForce(state, side);
   for (const unit of livingUnits(state, side)) {
     if (unit.controller !== "ai" || !isEligible(state, unit)) continue;
-    const decision = decideUnit(state, unit);
+    const decision = decideUnit(state, unit, plan.tasks.get(unit.id));
     state.intents[unit.id] = decision.intent;
     if (decision.path.length) moveUnit(state, unit, decision.path);
     const action = ROLE[unitType(unit.typeId).cls].action;

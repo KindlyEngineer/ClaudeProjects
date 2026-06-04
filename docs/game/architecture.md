@@ -152,10 +152,23 @@ memory), never ground truth. Staged, gated:
 > analysis), (2) after-action narration, or (3) an opt-in non-reproducible policy
 > excluded from tests/self-play. Env-configured, network-allowlisted, with the
 > deterministic AI as fallback. Revisit when there's a concrete use.
-- **AI-3 — Coordinated + adaptive planning**
-  A per-turn force plan from the belief — axis selection, role tasking, target
-  deconfliction, mutual support — adapting to *known* enemy posture. Bulk
-  self-play for balance/soundness.
+- **AI-3 — Coordinated + adaptive planning** *(in progress)*
+  A per-turn force plan (`sim/plan.ts`) assigns each unit a **task** (hold a
+  prepared position / screen / rove / rear). It is **deterministic yet varied**:
+  seeded "AI noise" (per seed/turn/side) picks posture, how far forward to set
+  up, and positions — so the same seed replays identically (self-play/tests
+  hold) but no two seeds play the same and the AI isn't a rote, exploitable
+  pattern. A defender no longer clumps on the point: it occupies cover/overwatch
+  positions, holds its supply to the rear, and sometimes **roves** the mech to
+  better ground instead of sitting. The unit AI consumes the task as its goal
+  (reusing the AI-2 consideration scorer). The attacker stays objective-seeking.
+  - **AI-3a — Varied, proactive positioning** ✅ — planner + tasks + seeded
+    variety; 4 plan tests (determinism, cross-seed variety, dispersed prepared
+    positions, attacker untouched) — 76 total. With the now-competent defender,
+    the core proof is decisive but realistic: unaided **0/20**, with support
+    **~16/24 (≥12/20)** — the defender sometimes holds even a supported attack.
+  - **AI-3b — Counterattack, reserves & target deconfliction** *(next)*.
+  - **AI-3c — Adaptivity + bulk self-play tuning**.
 
 Then the rest of v1 (Breakthrough objective, more units/maps in data) per brief §5.
 
