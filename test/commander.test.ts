@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { decideMech, exposureAt, sustainmentNeed } from "../src/sim/commander";
+import { updateBelief } from "../src/sim/knowledge";
 import { hexDistance } from "../src/sim/hex";
 import type { ObjectiveDef } from "../src/data/types";
 import { axial, find, openGame, place } from "./helpers";
@@ -96,6 +97,7 @@ describe("mech commander — vision gating of targets", () => {
       });
 
     const blind = base();
+    updateBelief(blind, "blue"); // the side forms its picture from what it can see
     const mechBlind = find(blind, "mech_assault");
     // The enemy is within the autocannon's range but beyond the mech's own sight.
     expect(decideMech(blind, mechBlind).fireTargetId).toBeNull();
@@ -111,6 +113,7 @@ describe("mech commander — vision gating of targets", () => {
         place("recon", "blue", axial(12, 4)),
       ],
     });
+    updateBelief(withRecon, "blue"); // recon now contributes to the picture
     const mechSeen = find(withRecon, "mech_assault");
     const enemy = find(withRecon, "infantry", "red");
     expect(decideMech(withRecon, mechSeen).fireTargetId).toBe(enemy.id);

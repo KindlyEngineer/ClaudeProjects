@@ -112,7 +112,37 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
 - **Slice 6 — Interactive UI**
   Minimal click-to-act layer feeding the same action API.
 
-Then v1 (full mirror, enabler AI, Breakthrough, bulk self-play) per brief §5.
+## AI milestone (the v1 core — sound, role-aware, fog-limited)
+
+Per the owner: the AI must (a) never behave tactically/logically unsoundly for
+either side, and (b) command *any* unit assigned to it (set per-unit in scenario
+data via `controller`), understanding each role's capabilities and limits. It
+plans coordinated + adaptive — but only on what it KNOWS (current sight + decayed
+memory), never ground truth. Staged, gated:
+
+- **AI-1 — Fog-limited knowledge + controller model** ✅
+  Per-side **belief** (`sim/knowledge.ts`): `updateBelief` each turn records
+  visible enemies as fresh sightings and remembers the rest at their last-known
+  hex, forgetting them after `memoryTurns`. The commander now positions on
+  *belief* (cautious around remembered threats) and fires only on what's *visibly*
+  there. A `controller` ("ai"/"player") is set per unit in scenario data
+  (`data/maps`); v0 keeps the brief's split (blue mech AI, blue support player,
+  red all AI). Verified: 4 belief/controller tests (70 total); the core proof
+  still holds (0/20 unaided, 16/20 with support).
+- **AI-2 — Role-aware force AI** *(next)*
+  Generalize `commandMechs` → `commandForce(side)` driving every `ai` unit by
+  role: recon scouts/keeps standoff, artillery suppresses from range, armour
+  seeks flanks, infantry holds cover, supply sustains, mech spearheads — with
+  capability/limitation soundness (penetration-aware targeting → no futile shots;
+  correct standoff; crit/ammo/fuel/supply awareness; hazard avoidance). Rewire
+  the match to controller-based; retire the scripted red policy. Soundness
+  encoded as self-play invariants.
+- **AI-3 — Coordinated + adaptive planning**
+  A per-turn force plan from the belief — axis selection, role tasking, target
+  deconfliction, mutual support — adapting to *known* enemy posture. Bulk
+  self-play for balance/soundness.
+
+Then the rest of v1 (Breakthrough objective, more units/maps in data) per brief §5.
 
 ## Verification loop
 Per change: `typecheck → vitest → build → screenshot / headless run`. From the

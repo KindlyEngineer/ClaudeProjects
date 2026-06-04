@@ -20,6 +20,7 @@ function mkUnit(typeId: string, hex: Hex, facing: Direction, side: "blue" | "red
     id: idc++,
     typeId,
     side,
+    controller: "ai",
     hex,
     facing,
     structure: t.structure,
@@ -49,6 +50,7 @@ function mkState(seed: number, units: UnitInstance[]): GameState {
     rngState: seed >>> 0,
     rollLog: [],
     intents: {},
+    belief: { blue: new Map(), red: new Map() },
   };
 }
 

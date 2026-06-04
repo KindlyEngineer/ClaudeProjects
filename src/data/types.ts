@@ -8,6 +8,11 @@ import type { Direction, Hex } from "../sim/hex";
 // ── Sides & control ─────────────────────────────────────────────────────────
 export type Side = "blue" | "red";
 
+/** Who issues a unit's orders. Set per-unit in scenario data (the campaign
+ *  designer decides AI vs player ahead of time). The AI commands every `ai`
+ *  unit, role-aware; the player commands the `player` ones. */
+export type Controller = "ai" | "player";
+
 /** Unit role. `mech` units are driven by the autonomous commander AI and are
  *  never player-ordered; everything else is the support/logistics effort. */
 export type UnitClass =
@@ -84,6 +89,7 @@ export interface UnitPlacement {
   readonly side: Side;
   readonly hex: Hex;
   readonly facing: Direction;
+  readonly controller?: Controller; // default "ai"; mark player-run units explicitly
 }
 
 export interface MapDef {

@@ -38,5 +38,6 @@ export const RULES = {
     supportReduction: 0.22, // per nearby friendly support unit
     supportRadius: 3,
     fogCaution: 2.6, // exposure added for advancing into UNSCOUTED hexes (no recon → cautious)
+    memoryTurns: 4, // how long a last-known enemy sighting is remembered after losing sight
   },
 } as const;

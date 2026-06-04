@@ -6,9 +6,20 @@ import { attackUnit, moveUnit } from "./actions";
 import { hexDistance, hexKey, type Hex } from "./hex";
 import { supplySources } from "./logistics";
 import { pathTo, reachable } from "./pathing";
+import { believedEnemies, visibleSightings } from "./knowledge";
 import { canMove, livingUnits, terrainAt, type GameState, type UnitInstance } from "./state";
 import { isEligible } from "./turn";
-import { isScouted, visibleEnemies } from "./vision";
+import { isScouted } from "./vision";
+
+// A minimal enemy view — satisfied by both a live UnitInstance and a remembered
+// Sighting — so the AI scores on its fog-limited belief, never ground truth.
+interface EnemyView {
+  id: number;
+  typeId: string;
+  hex: Hex;
+  structure: number;
+  suppression: number;
+}
 
 // The mech commander: a capability-aware, objective-seeking UTILITY AI. For each
 // mech it scores every reachable hex by a transparent weighted sum and takes the
@@ -64,7 +75,7 @@ function supportNear(state: GameState, side: Side, hex: Hex): number {
 /** How exposed a hex is for `side`: incoming enemy fire (reduced by enemy
  *  suppression, terrain cover and nearby support) plus a caution penalty for
  *  advancing into hexes the side hasn't scouted. */
-export function exposureAt(state: GameState, side: Side, hex: Hex, enemies: UnitInstance[]): number {
+export function exposureAt(state: GameState, side: Side, hex: Hex, enemies: readonly EnemyView[]): number {
   const c = RULES.commander;
   let threat = 0;
   for (const e of enemies) {
@@ -86,13 +97,13 @@ export function exposureAt(state: GameState, side: Side, hex: Hex, enemies: Unit
 
 interface AttackOpp {
   value: number;
-  target: UnitInstance | null;
+  target: EnemyView | null;
 }
-function attackOpportunityAt(mech: UnitInstance, hex: Hex, enemies: UnitInstance[]): AttackOpp {
+function attackOpportunityAt(mech: UnitInstance, hex: Hex, enemies: readonly EnemyView[]): AttackOpp {
   const w = unitType(mech.typeId).weapons[0];
   if (!w) return { value: 0, target: null };
   let best = 0;
-  let target: UnitInstance | null = null;
+  let target: EnemyView | null = null;
   for (const e of enemies) {
     const d = hexDistance(hex, e.hex);
     if (d < w.rangeMin || d > w.rangeMax) continue;
@@ -116,7 +127,8 @@ function nearestDist(hex: Hex, points: readonly Hex[]): number {
 /** Decide one mech's action this turn (pure — no mutation). */
 export function decideMech(state: GameState, mech: UnitInstance): CommanderDecision {
   const side = mech.side;
-  const enemies = visibleEnemies(state, side);
+  const believed = believedEnemies(state, side); // current + remembered — for positioning
+  const visible = visibleSightings(state, side); // only what's in sight — for firing
   const zone = state.objective.zone; // the whole zone is the goal, not one hex
   const zoneKeys = new Set(zone.map(hexKey));
   const supplyPts = supplySources(state, side);
@@ -131,13 +143,13 @@ export function decideMech(state: GameState, mech: UnitInstance): CommanderDecis
   const mobile = canMove(mech);
 
   let bestKey = hexKey(mech.hex);
-  let best = { hex: mech.hex, objGain: 0, supGain: 0, exp: exposureAt(state, side, mech.hex, enemies), atk: attackOpportunityAt(mech, mech.hex, enemies).value };
+  let best = { hex: mech.hex, objGain: 0, supGain: 0, exp: exposureAt(state, side, mech.hex, believed), atk: attackOpportunityAt(mech, mech.hex, visible).value };
   let bestScore = -Infinity;
   const consider = (h: Hex, key: string) => {
     const objGain = dObjFrom - nearestDist(h, zone);
     const supGain = dSupFrom - nearestDist(h, supplyPts);
-    const exp = exposureAt(state, side, h, enemies);
-    const atk = attackOpportunityAt(mech, h, enemies).value;
+    const exp = exposureAt(state, side, h, believed); // cautious around remembered threats too
+    const atk = attackOpportunityAt(mech, h, visible).value; // can only line up shots on what's seen
     const seize = zoneKeys.has(key) ? c.wSeize : 0; // taking the zone ends the battle
     const score =
       c.wObjective * objGain + seize + c.wSupply * need.need * supGain - c.wThreat * exp + c.wAttack * atk;
@@ -155,11 +167,11 @@ export function decideMech(state: GameState, mech: UnitInstance): CommanderDecis
 
   const path = mobile ? pathTo(reach, bestKey) : [];
   const finalHex = best.hex;
-  const fire = attackOpportunityAt(mech, finalHex, enemies);
+  const fire = attackOpportunityAt(mech, finalHex, visible);
   const fireTargetId = fire.target?.id ?? null;
 
-  const stance = deriveStance({ mobile, need, best, dObjFrom, fireTargetId, enemiesSeen: enemies.length });
-  const intent = deriveIntent(stance, { need, fire, enemiesSeen: enemies.length, exposed: best.exp });
+  const stance = deriveStance({ mobile, need, best, dObjFrom, fireTargetId, enemiesSeen: believed.length });
+  const intent = deriveIntent(stance, { need, fire, enemiesSeen: believed.length, exposed: best.exp });
   return { unitId: mech.id, stance, intent, destination: finalHex, path, fireTargetId };
 }
 
