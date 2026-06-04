@@ -1,66 +1,81 @@
 # Project: VANTAGE
 
-VANTAGE is a 2.5D bullet-heaven (Vampire Survivors / Megabonk lineage) built
-from scratch in TypeScript + Three.js. Its differentiator: **the arena is real
-tactical space** — tile-based levels of walls, cover and hazards that block
-movement, projectiles and line-of-sight and funnel the horde (a more open
-SYNTHETIK 2). Currently at **M3** (the build loop: 5 geometry-exploiting weapon
-archetypes — gun, piercing lance, wall-arcing lobber, orbit blades, knockback
-knocker — each leveled via a level-up upgrade draft of weapon/passive cards,
-plus a difficulty ramp and a timed boss — on the M2 tile arenas: seeded chunk
-assembly, wall collision, LOS-gated fire, hazard kill-zones, flow-field horde
-pathing). A `RunConfig {seed,theme,character}` seam + `startRun()` is in place
-for the future menu flow (theme = tileset). See `docs/game/` for the design
-doc, architecture, and roadmap.
+VANTAGE is a turn-based, hex-based **combined-arms tactics** game built from
+scratch in TypeScript + Three.js (2.5D, continuous heightmap render). Its one
+unusual premise: **the player commands the supporting effort and the supply
+line, never the main effort.** The heaviest units — the mechs — are run by an
+autonomous, *legible*, objective-seeking utility-AI commander. The player never
+orders the mechs; they win or lose by *enabling* that autonomous main effort —
+feeding it supply, vision and fire support, and shaping the battlefield the
+commander reasons over.
 
-> Note: an earlier M2 explored a continuous-heightmap *verticality* mechanic;
-> it was reassessed and replaced by the tile/geometry approach above. The name
-> "VANTAGE" predates that pivot and may be revisited.
+**The hypothesis the first slice must prove:** a player controlling only support
+and logistics can meaningfully and legibly change the outcome of a battle fought
+by an autonomous main effort.
+
+> **`docs/brief.md` is the design source of truth.** Do not deviate from its
+> locked decisions without flagging. Resolved with the owner: loss = mission
+> failure OR all mechs destroyed OR all support units lost; v0 ships an
+> interactive UI *and* a headless harness; the heightmap is **visual** in v0
+> (sim cover/exposure comes from terrain *type*), elevation turns mechanical in v1.
+
+> History: this repo previously held a 2.5D bullet-heaven also called "VANTAGE";
+> it was scrapped. Only the 2.5D + heightmap presentation and the self-
+> verification harness carried over. Git history retains the old build.
 
 ## Stack
 - Language / runtime: TypeScript on Node 22 (ships to the browser)
 - Package manager: npm
-- Key frameworks: Three.js (WebGL rendering), Vite (build/dev), Vitest (tests),
-  Playwright (headless screenshot verification)
+- Frameworks: Three.js (2.5D WebGL render), Vite (build/dev), Vitest (tests),
+  Playwright (headless screenshot verification). Minimal dependencies by design.
 
 ## Layout
-- `src/` — game source
-  - `core/` — loop (fixed timestep + interpolation), RNG, math helpers
-  - `sim/` — pure (GPU-free) game sim: SoA `World`, `Sim` systems, tile `Level`,
-    `levelGen` (chunk assembly), `flowField` (horde pathing), `spatialHash`
-  - `render/` — Three.js scene, camera math, billboards, `levelMesh`, textures
-  - `game/` — player view, input, autopilot
-  - `ui/` — DOM HUD
-  - `config/` — `balance.ts` (tunables), `runConfig.ts` (theme/character seam)
-- `test/` — Vitest unit tests for pure sim logic (run headlessly, no GPU)
-- `tools/` — `screenshot.ts` self-verification harness
-- `scripts/` — automation, including the session-start dependency installer
-- `docs/game/` — `design.md` and `architecture.md`
+- `src/`
+  - `core/` — `rng.ts` (seeded mulberry32), `math.ts`
+  - `sim/` — pure deterministic simulation (no THREE):
+    - `hex.ts` — hex geometry: coords, distance, line, facing → armour arcs
+    - `state.ts` — `GameState`, unit instances, `createGame()` from a map
+    - *(coming: `combat.ts`, `logistics.ts`, `vision.ts`, `commander.ts`,
+      `turn.ts`, `actions.ts`)*
+  - `data/` — all content as data tables: `types.ts` (schemas), `terrain.ts`,
+    `units.ts`, `maps/` (handcrafted maps). Add a row to add content.
+  - `render/` — reads sim state only: `view.ts` (scene/camera), `board.ts`
+    (heightmap terrain + hex grid + facing-aware unit markers)
+  - `main.ts` — boot
+- `test/` — Vitest unit tests (pure logic, no GPU)
+- `tools/screenshot.ts` — Playwright board-state capture
+- `docs/` — `brief.md` (source of truth), `game/` (design + architecture),
+  `cloud-environment.md`
 
-## Conventions
-- Keep sim logic pure and GPU-free where possible so it stays Vitest-testable.
-- Data-oriented hot path (typed arrays / SoA), no per-frame allocations.
-- All balance constants go in `src/config/balance.ts`, not inline.
-- Run the full test suite before declaring a task done: `npm test`
-- Typecheck before committing: `npm run typecheck`
+## Architecture rules (from the brief)
+- **Pure-function deterministic sim, fully separate from render.** Render only
+  reads state. This is what makes mechanics unit-testable and self-play possible.
+- **Seed all randomness; log every roll** (`GameState.rollLog`) for the harness.
+- **Data-driven content** — units, weapons, crit tables, objectives, maps are
+  data, not code branches.
+- **The mech commander + AI enabler are reusable modules**, shared by the
+  player-side AI, the enemy, and AI-vs-AI self-play.
+- **One uniform combat model for every unit** (facing armour + structure + a
+  shared 4-state crit table + suppression). No bespoke per-unit systems. No heat.
+- **Programmer art only.** No real assets, audio, or animation.
 
 ## Build & test
-- Install deps: handled automatically at session start by `scripts/install_deps.sh`
+- Install deps: handled at session start by `scripts/install_deps.sh`
 - Typecheck: `npm run typecheck`
-- Test: `npm test`
+- Test: `npm test` (run the full suite before declaring a task done)
 - Build: `npm run build`
-- Run locally: `npm run dev` (open the printed localhost URL; WASD/arrows to move)
-- Screenshot-verify: `npm run screenshot` → `tools/shots/latest.png`
+- Run locally: `npm run dev`
+- Screenshot-verify: `npm run screenshot` → `tools/shots/latest.png`, or
+  `npx tsx tools/screenshot.ts "name=?seed=N"`
+
+## Verification workflow
+Build in vertical slices; self-verify at each commit (typecheck → vitest →
+build → screenshot/headless run). Run autonomously within a slice; gate between
+slices. Headless AI-vs-AI self-play is the primary balance/termination harness
+(arrives with the AI slices).
 
 ## Notes for cloud sessions
-- Screenshot self-verification works **regardless of network policy**. The
-  harness (`npm run screenshot` → `tools/shots/latest.png`) prefers a standard
-  Playwright/system Chromium, but falls back to `@sparticuz/chromium` — a
-  Chromium delivered through the npm registry — so it needs no access to the
-  often-blocked Playwright CDN (`cdn.playwright.dev`). Allowlisting that CDN
-  (see `docs/cloud-environment.md`) is optional and just swaps in the full
-  upstream Chromium.
-- `gh` CLI is NOT pre-installed; the environment setup script installs it (see
-  `docs/cloud-environment.md`).
-- No secrets store exists — anything sensitive goes in environment variables
-  (visible to anyone who can edit the environment).
+- Screenshot self-verification works regardless of network policy: the harness
+  prefers system/Playwright Chromium but falls back to `@sparticuz/chromium`
+  (npm-delivered), so it needs no access to the Playwright CDN.
+- No secrets store — anything sensitive goes in environment variables.
