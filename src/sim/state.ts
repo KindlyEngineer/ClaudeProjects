@@ -20,7 +20,14 @@ export interface UnitInstance {
   suppression: number; // 0..N morale pressure
   crits: string[]; // active CritState ids
   supply: number; // supply units: remaining resupply budget (else 0)
-  hasActed: boolean; // consumed its action this phase
+  // Per-turn activation (reset each turn): a unit may move once and take one
+  // main action (fire or resupply).
+  movedThisTurn: boolean;
+  actedThisTurn: boolean;
+  reserved: boolean; // held out of its home phase to commit in maneuver
+  // Logistics (recomputed each turn from supply-line tracing).
+  inSupply: boolean;
+  dryTurns: number; // consecutive turns cut off from supply
 }
 
 export type Phase = "recon" | "fires" | "maneuver";
@@ -67,7 +74,11 @@ export function createGame(map: MapDef, seed: number): GameState {
       suppression: 0,
       crits: [],
       supply: t.supplyCapacity ?? 0,
-      hasActed: false,
+      movedThisTurn: false,
+      actedThisTurn: false,
+      reserved: false,
+      inSupply: true,
+      dryTurns: 0,
     };
   });
 

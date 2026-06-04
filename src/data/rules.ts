@@ -16,5 +16,9 @@ export const RULES = {
 
   // Suppression / morale.
   suppressionBreak: 8, // reaching this inflicts a "shaken" crit (morale break)
-  suppressionDecayPerTurn: 3, // recovered each turn the unit isn't hit (slice 3)
+  suppressionDecayPerTurn: 3, // recovered each turn the unit isn't hit
+
+  // Logistics dry-out (consecutive turns cut off from a supply source).
+  dryMoveTurns: 2, // ≥ this many dry turns → movement points halved
+  dryFireTurns: 3, // ≥ this many dry turns → cannot fire (rationing what's left)
 } as const;

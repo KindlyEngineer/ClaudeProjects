@@ -206,7 +206,7 @@ function buildUnitMarker(u: UnitInstance, size: number, lift: number): THREE.Gro
   prong.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   g.add(prong);
 
-  g.add(makeLabel(style.abbr, color));
+  g.add(makeBadge(u, style.abbr, color));
 
   // Lift the whole marker to its hex's surface height (reads as grounded) and
   // scale up so units stay legible on the larger board.
@@ -215,26 +215,50 @@ function buildUnitMarker(u: UnitInstance, size: number, lift: number): THREE.Gro
   return g;
 }
 
-function makeLabel(text: string, color: number): THREE.Sprite {
+// A billboarded badge: side-coloured ring, a health arc (green→red by remaining
+// structure), the class letter, and small status pips (orange = shaken crew,
+// red = cut off from supply) — so combat and logistics state read at a glance.
+function makeBadge(u: UnitInstance, abbr: string, color: number): THREE.Sprite {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 64;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "rgba(8,10,14,0.85)";
+  const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
+
+  ctx.fillStyle = "rgba(8,10,14,0.88)";
   ctx.beginPath();
   ctx.arc(32, 32, 28, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = `#${color.toString(16).padStart(6, "0")}`;
-  ctx.lineWidth = 5;
+
+  ctx.strokeStyle = hex(color); // side identity
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(32, 32, 29, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 38px ui-monospace, monospace";
+
+  const frac = Math.max(0, Math.min(1, u.structure / unitType(u.typeId).structure));
+  ctx.strokeStyle = frac > 0.6 ? "#5ad06a" : frac > 0.3 ? "#e6c84a" : "#e0563c";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.arc(32, 32, 23, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = u.crits.includes("shaken") ? "#ffb23c" : "#ffffff";
+  ctx.font = "bold 30px ui-monospace, monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, 32, 34);
+  ctx.fillText(abbr, 32, 33);
+
+  if (!u.inSupply) {
+    ctx.fillStyle = "#ff4a4a"; // cut off from supply
+    ctx.beginPath();
+    ctx.arc(50, 16, 7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true }));
   sprite.position.set(0, 1.3, 0);
-  sprite.scale.set(0.8, 0.8, 0.8);
+  sprite.scale.set(0.85, 0.85, 0.85);
   return sprite;
 }

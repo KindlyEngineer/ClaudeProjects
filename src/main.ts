@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { createView } from "./render/view";
 import { buildBoard } from "./render/board";
 import { createGame } from "./sim/state";
+import { updateSupply } from "./sim/logistics";
+import { scriptedSkirmish } from "./sim/demo";
 import { MAP01 } from "./data/maps/map01";
 
 // Slice 1 boot: build the game state from a map and render the 2.5D board.
@@ -17,6 +19,10 @@ const seed = Number(params.get("seed") ?? 1);
 
 const view = createView(container);
 const state = createGame(MAP01, seed);
+// ?demo=skirmish runs a deterministic scripted exchange (so the capture shows
+// movement + combat); otherwise just render the opening position.
+if (params.get("demo") === "skirmish") scriptedSkirmish(state, Number(params.get("turns") ?? 6));
+else updateSupply(state);
 const board = buildBoard(state);
 view.scene.add(board.group);
 view.frame(new THREE.Vector3(board.min.x, board.min.y, board.min.z), new THREE.Vector3(board.max.x, board.max.y, board.max.z));

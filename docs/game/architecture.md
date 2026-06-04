@@ -53,10 +53,22 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
   `effectiveVision` for later slices. Tuning in `data/rules.ts`. Verified: 10
   unit tests (facing arcs, front-bounces/rear-penetrates end-to-end, ammo use,
   determinism + roll-logging, suppression break, range/cover) — 27 total.
-- **Slice 3 — Turns, actions & logistics**
-  Phased initiative + reserve; the shared player-action API; finite ammo +
-  fuel/MP; adjacent resupply; supply-line tracing with dry-out penalties.
-  Invariant tests (supply never negative; matches terminate).
+- **Slice 3 — Turns, actions & logistics** ✅
+  Phased initiative recon→fires→maneuver with a reserve (`sim/turn.ts`: home
+  phase by class, `beginTurn` upkeep — supply recompute, suppression decay,
+  shaken recovery). The shared player-action API (`sim/actions.ts`:
+  `moveUnit`/`attackUnit`/`resupplyUnit` — one move + one main action per unit
+  per turn) that the UI, scripted scenarios and the AIs all drive. Tactical
+  logistics (`sim/logistics.ts`): finite ammo + fuel/MP, adjacent resupply from
+  a finite budget, and supply-line tracing (BFS from a side's home edge +
+  forward supply units; enemies/impassable terrain cut the line) with dry-out
+  penalties (halved MP, then no fire). Verified: 20 unit tests (phase order &
+  eligibility, reserve, upkeep; move/fire/resupply validation incl. move-then-
+  fire; supply cut by terrain & by enemies, forward-depot projection, dry-out,
+  non-negative-supply invariant, phased run terminates within the turn cap) —
+  47 total — plus a deterministic scripted skirmish on the real map (headless
+  dump: 35 logged rolls, a unit destroyed, a mech mobility-killed & stranded,
+  suppression climbing) and a board screenshot with health/supply status badges.
 - **Slice 4 — Vision + mech commander AI**
   Vision gating; the inspectable utility commander reading v0's inputs; the
   per-turn intent string. Decision unit-tests (state → action).

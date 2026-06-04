@@ -28,7 +28,11 @@ function mkUnit(typeId: string, hex: Hex, facing: Direction, side: "blue" | "red
     suppression: 0,
     crits: [],
     supply: t.supplyCapacity ?? 0,
-    hasActed: false,
+    movedThisTurn: false,
+    actedThisTurn: false,
+    reserved: false,
+    inSupply: true,
+    dryTurns: 0,
   };
 }
 
