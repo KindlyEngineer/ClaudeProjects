@@ -9,6 +9,7 @@ import { scriptedSkirmish } from "./sim/demo";
 import { noSupport, playerSupport, runMatch } from "./sim/match";
 import { unitType } from "./data/units";
 import { MAP01, MAP01_BREAKTHROUGH } from "./data/maps/map01";
+import { MAP02 } from "./data/maps/map02";
 
 // Slice 1 boot: build the game state from a map and render the 2.5D board.
 // Turn-based, so there is no fixed-timestep sim loop — we render on demand (and
@@ -22,7 +23,8 @@ const params = new URLSearchParams(location.search);
 const seed = Number(params.get("seed") ?? 1);
 
 const view = createView(container);
-const map = params.get("map") === "breakthrough" ? MAP01_BREAKTHROUGH : MAP01;
+const mapParam = params.get("map");
+const map = mapParam === "breakthrough" ? MAP01_BREAKTHROUGH : mapParam === "steppe" ? MAP02 : MAP01;
 const state = createGame(map, seed);
 // ?demo=skirmish runs a deterministic scripted exchange (so the capture shows
 // movement + combat); otherwise just render the opening position.

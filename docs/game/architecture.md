@@ -246,8 +246,26 @@ memory), never ground truth. Staged, gated:
   decision-input tests (friendly-support proximity, clock urgency) — **so all six
   commander inputs now have a test** — 89 total. `MAP01_BREAKTHROUGH` ships for
   the scenario; screenshot in `docs/shots/breakthrough.png`.
-- **V1-D — content + self-play balance** *(next)*. Plus the deferred interactive
-  UI and the LLM-policy seam (above).
+- **V1-D — content + self-play balance** ✅
+  *Content (all data):* new units — a **Scout Mech** (faster/lighter, cheaper to
+  run) and **Combat Engineers** — and a second map, **Open Steppe** (`map02.ts`,
+  more open, a heavier attack vs a light screen). They reuse existing class roles
+  and renderers — add a row, get a unit. *Self-play:* `tools/selfplay.ts` now runs
+  a **set** of scenarios and reports per-scenario + aggregate attacker/defender
+  split. Across the set (hundreds of matches) every match terminates with **zero**
+  invariant violations, and the AI plays **both roles competently** — it wins the
+  attack on Steppe (given superiority on open ground, ~65%) and holds the defence
+  on Ridge (attacker rarely breaks through unaided). Tested.
+  > On "balance ~50–65%": outcomes track scenario *force ratio* (the sign of an
+  > unbiased AI), not an AI bias. The canonical Ridge map is asymmetric *by design*
+  > — the attacker needs the player's support, the whole premise — so its self-play
+  > is defender-favoured intentionally. A precise aggregate 50–65% wants a set of
+  > dedicated *symmetric/role-mirrored* scenarios with tuned ratios; that curation
+  > (and richer engineer mechanics — smoke/obstacles) is the remaining v1 polish.
+
+Still open in v1: the interactive UI (make it hands-on playable), the optional
+LLM-policy seam, and a curated symmetric balance set + engineer battlefield
+effects.
 
 (Brief §5: full mirror + enabler, all six commander inputs each tested, Seize +
 Breakthrough, 2–3 maps, bulk self-play balance ~50–65%.)

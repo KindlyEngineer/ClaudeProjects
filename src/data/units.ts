@@ -23,6 +23,23 @@ export const UNITS: Record<string, UnitType> = {
     ],
   },
 
+  // A lighter mech — faster, longer sight, cheaper to keep running, but thinner
+  // armour: differentiated by capability + sustainment, not bespoke systems.
+  mech_scout: {
+    id: "mech_scout",
+    name: "Scout Mech",
+    cls: "mech",
+    armor: { front: 5, side: 4, rear: 3 },
+    structure: 20,
+    move: 6,
+    fuelMax: 36,
+    vision: 8,
+    light: true,
+    weapons: [
+      { name: "Light Autocannon", damage: 5, rangeMin: 0, rangeMax: 9, accuracy: 0.72, suppression: 2, ammoMax: 12, indirect: false, penetration: 6 },
+    ],
+  },
+
   // ── Player support / logistics effort ──
   recon: {
     id: "recon",
@@ -78,6 +95,20 @@ export const UNITS: Record<string, UnitType> = {
     light: true,
     weapons: [
       { name: "AT Team", damage: 5, rangeMin: 0, rangeMax: 4, accuracy: 0.55, suppression: 2, ammoMax: 6, indirect: false, penetration: 7 },
+    ],
+  },
+  engineer: {
+    id: "engineer",
+    name: "Combat Engineers",
+    cls: "engineer",
+    armor: { front: 3, side: 2, rear: 2 },
+    structure: 10,
+    move: 4,
+    fuelMax: 22,
+    vision: 4,
+    light: true,
+    weapons: [
+      { name: "Demo Charges", damage: 6, rangeMin: 0, rangeMax: 2, accuracy: 0.6, suppression: 2, ammoMax: 8, indirect: false, penetration: 8 },
     ],
   },
   supply: {

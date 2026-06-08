@@ -1,50 +1,57 @@
-// Bulk AI-vs-AI self-play — the brief's primary balance / termination / crash /
-// invariant harness. Runs N seeded matches with BOTH sides fully AI-commanded
-// and reports the outcome split, match length, and any invariant violations.
+// Bulk AI-vs-AI self-play across a SET of scenarios — the brief's primary
+// balance / termination / crash / invariant harness. Both sides fully AI;
+// reports per-scenario and aggregate attacker/defender win split, match length,
+// and any invariant violations.
 //
-// Usage: npx tsx tools/selfplay.ts [N]   (default 200)
+// Usage: npx tsx tools/selfplay.ts [N]   (default 100 seeds per scenario)
 
 import { createGame, livingUnits } from "../src/sim/state";
 import { noSupport, runMatch } from "../src/sim/match";
-import { MAP01 } from "../src/data/maps/map01";
+import type { MapDef } from "../src/data/types";
+import { MAP01, MAP01_BREAKTHROUGH } from "../src/data/maps/map01";
+import { MAP02 } from "../src/data/maps/map02";
 
-const N = Number(process.argv[2] ?? 200);
+const N = Number(process.argv[2] ?? 100);
 
-function allAiGame(seed: number) {
-  const map = { ...MAP01, units: MAP01.units.map((u) => ({ ...u, controller: "ai" as const })) };
-  return createGame(map, seed);
-}
+const scenarios: Array<{ name: string; map: MapDef }> = [
+  { name: "Ridge — Seize", map: MAP01 },
+  { name: "Ridge — Breakthrough", map: MAP01_BREAKTHROUGH },
+  { name: "Steppe — Seize", map: MAP02 },
+];
 
-let blue = 0;
-let red = 0;
-let turnsSum = 0;
-let minTurns = Infinity;
-let maxTurns = 0;
+const allAi = (map: MapDef): MapDef => ({ ...map, units: map.units.map((u) => ({ ...u, controller: "ai" as const })) });
+const pct = (n: number, d: number) => `${((100 * n) / Math.max(1, d)).toFixed(0)}%`;
+
+let aggAtt = 0;
+let aggTotal = 0;
 let violations = 0;
+let turnSum = 0;
 
-for (let seed = 1; seed <= N; seed++) {
-  const s = allAiGame(seed);
-  const r = runMatch(s, noSupport);
-  if (r.outcome === "blue") blue++;
-  else if (r.outcome === "red") red++;
-  else violations++; // non-decisive (should never happen)
-
-  turnsSum += r.turns;
-  minTurns = Math.min(minTurns, r.turns);
-  maxTurns = Math.max(maxTurns, r.turns);
-  if (r.turns > s.objective.turnLimit + 1) violations++; // failed to terminate in time
-
-  for (const u of livingUnits(s)) {
-    if (u.supply < 0 || u.fuel < 0 || Math.min(0, ...u.ammo) < 0) {
-      violations++;
-      break;
+console.log(`self-play: ${N} seeds × ${scenarios.length} scenarios (both sides AI)`);
+for (const sc of scenarios) {
+  const map = allAi(sc.map);
+  let att = 0;
+  let def = 0;
+  for (let seed = 1; seed <= N; seed++) {
+    const s = createGame(map, seed);
+    const r = runMatch(s, noSupport);
+    const attackerWon = r.outcome === sc.map.objective.attacker;
+    if (r.outcome === "blue" || r.outcome === "red") attackerWon ? att++ : def++;
+    else violations++;
+    if (r.turns > s.objective.turnLimit + 1) violations++;
+    turnSum += r.turns;
+    for (const u of livingUnits(s)) {
+      if (u.supply < 0 || u.fuel < 0 || Math.min(0, ...u.ammo) < 0) {
+        violations++;
+        break;
+      }
     }
   }
+  aggAtt += att;
+  aggTotal += att + def;
+  console.log(`  ${sc.name.padEnd(22)} attacker ${pct(att, N)}  ·  defender ${pct(def, N)}`);
 }
 
-const pct = (n: number) => `${((100 * n) / N).toFixed(0)}%`;
-console.log(`self-play: ${N} AI-vs-AI matches on "${MAP01.name}" (Seize; blue attacks, red defends)`);
-console.log(`  outcomes : blue ${blue} (${pct(blue)})  ·  red ${red} (${pct(red)})`);
-console.log(`  turns    : avg ${(turnsSum / N).toFixed(1)}  ·  min ${minTurns}  ·  max ${maxTurns}`);
-console.log(`  invariant violations: ${violations}`);
+console.log(`  ${"AGGREGATE".padEnd(22)} attacker ${pct(aggAtt, aggTotal)}  ·  defender ${pct(aggTotal - aggAtt, aggTotal)}`);
+console.log(`  avg turns ${(turnSum / Math.max(1, aggTotal)).toFixed(1)}  ·  invariant violations: ${violations}`);
 process.exit(violations > 0 ? 1 : 0);
