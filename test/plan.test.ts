@@ -37,12 +37,13 @@ describe("force planning (AI-3a)", () => {
     expect([...plan.tasks.values()].some((t) => t.kind === "rear")).toBe(true); // supply held back
   });
 
-  it("aims the attacker's AI units at a zone hex (its chosen axis)", () => {
+  it("tasks the attacker's AI units to develop/assault the objective", () => {
     const s = createGame(MAP01, 3);
-    const tasks = [...planForce(s, "blue").tasks.values()]; // blue = attacker
-    const zoneKeys = new Set(s.objective.zone.map(hexKey));
+    // In MAP01 only the blue mech is AI (support is player-run), so it gets a
+    // maneuver task; an all-AI side would also see recon probe + screens advance.
+    const tasks = [...planForce(s, "blue").tasks.values()];
     expect(tasks.length).toBeGreaterThanOrEqual(1);
-    expect(tasks.every((t) => t.kind === "advance" && zoneKeys.has(hexKey(t.goalHex)))).toBe(true);
+    expect(tasks.every((t) => t.kind === "advance" || t.kind === "probe")).toBe(true);
   });
 
   it("picks the least-defended zone hex as the axis (adaptive to what it perceives)", () => {

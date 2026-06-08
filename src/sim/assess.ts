@@ -93,11 +93,34 @@ export function assess(state: GameState, side: Side): Assessment {
   return { advantage, scouted, haveContact: visible.length > 0, targetId: target?.id ?? null };
 }
 
-/** Update the defender's posture with hysteresis: it gathers information (probe)
- *  until confident, then commits (counter) only on a perceived advantage, and
- *  falls back to hold otherwise. Aggression is never taken on an unknown. */
+/** Is the attacker ready to assault? Only once it has SCOUTED the defence and
+ *  established fire superiority (the defenders are suppressed/degraded) or it
+ *  perceives a clear advantage — never a bare-knuckle charge into the unknown. */
+export function attackerShouldAssault(state: GameState, side: Side): boolean {
+  const a = assess(state, side);
+  if (!a.haveContact || a.scouted < RULES.commander.minScoutToCommit) return false;
+  const visible = visibleSightings(state, side);
+  if (visible.length === 0) return true; // objective undefended → take it
+  const brk = RULES.suppressionBreak;
+  const neutralized = visible.filter(
+    (s) => s.crits.includes("shaken") || s.suppression >= brk * 0.6 || s.structure < unitType(s.typeId).structure * 0.4,
+  ).length;
+  return neutralized / visible.length >= 0.5 || a.advantage >= RULES.commander.assaultAdvantage;
+}
+
+/** Update both sides' posture with hysteresis. The DEFENDER gathers information
+ *  (probe) until confident, then commits (counter) only on a perceived advantage.
+ *  The ATTACKER develops the attack (scout + suppress) and only assaults once it
+ *  has fire superiority. Aggression is never taken on an unknown; once committed,
+ *  a side stays committed. */
 export function updatePostures(state: GameState): void {
-  const defender: Side = state.objective.attacker === "blue" ? "red" : "blue";
+  const attacker = state.objective.attacker;
+  const ap = state.posture[attacker];
+  // Once you assault, you're committed; otherwise develop until ready.
+  const an = ap.kind === "assault" || attackerShouldAssault(state, attacker) ? "assault" : "develop";
+  if (an !== ap.kind) state.posture[attacker] = { kind: an, since: state.turn, targetId: null };
+
+  const defender: Side = attacker === "blue" ? "red" : "blue";
   const c = RULES.commander;
   const a = assess(state, defender);
   const cur = state.posture[defender];

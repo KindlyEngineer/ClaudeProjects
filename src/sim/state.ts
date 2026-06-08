@@ -80,7 +80,8 @@ export type Belief = Map<number, Sighting>;
  *  hysteresis). "probe" = gain information; "counter" = perceived advantage,
  *  go aggressive; "hold" = defend prepared positions. */
 export interface PostureState {
-  kind: "hold" | "probe" | "counter";
+  // Defender: hold → probe → counter. Attacker: develop → assault.
+  kind: "hold" | "probe" | "counter" | "develop" | "assault";
   since: number;
   targetId: number | null;
 }

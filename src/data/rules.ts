@@ -46,6 +46,7 @@ export const RULES = {
     counterHysteresis: 1.2, // stay committed while the ratio holds above this
     minScoutToCommit: 0.45, // fraction of the approach corridor that must be scouted first
     unknownStrength: 26, // assumed hidden enemy strength per fully-unscouted corridor
+    assaultAdvantage: 1.5, // attacker commits the assault at this perceived ratio (or once the defence is suppressed)
     // Fallibility (scaled by 1 - skill): commanders aren't perfect.
     satisficeBand: 6, // a fallible commander may pick any move within this of the best
     assessError: 0.35, // ± error a fallible commander makes judging its advantage
