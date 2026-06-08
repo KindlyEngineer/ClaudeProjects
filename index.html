@@ -5,19 +5,65 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>VANTAGE</title>
     <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0c10; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0c10;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #d6e0f5; }
       #app { width: 100vw; height: 100vh; display: block; }
       #hud {
         position: fixed; top: 10px; left: 12px;
-        font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px; line-height: 1.5;
         color: #aab8d4; opacity: 0.9; pointer-events: none; user-select: none;
         text-shadow: 0 1px 2px #000;
       }
+
+      /* Control bar — phase/turn + the End Phase button (bottom-centre, above the cards). */
+      #bar {
+        position: fixed; left: 50%; bottom: 178px; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 14px;
+        background: rgba(10, 13, 20, 0.82); border: 1px solid #2a3550; border-radius: 10px;
+        padding: 7px 12px; user-select: none; backdrop-filter: blur(3px);
+      }
+      #bar .bar-info { font-size: 13px; font-weight: 700; color: #eaf0ff; letter-spacing: 0.4px; }
+      #bar .bar-hint { font-size: 11px; color: #8ea0c4; }
+      #bar .btn {
+        font: inherit; font-size: 12px; font-weight: 700; color: #06203a;
+        background: #7fb0ff; border: none; border-radius: 7px; padding: 6px 12px; cursor: pointer;
+      }
+      #bar .btn:hover { background: #a9caff; }
+
+      /* Unit info cards — bottom-centre. */
+      #cards {
+        position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%);
+        display: flex; gap: 8px; max-width: 96vw; overflow-x: auto; padding: 4px;
+        user-select: none;
+      }
+      .card {
+        width: 138px; flex: 0 0 auto; box-sizing: border-box;
+        background: rgba(12, 16, 24, 0.9); border: 1px solid #283350; border-left: 4px solid var(--side, #4a90ff);
+        border-radius: 8px; padding: 6px 8px; cursor: pointer; transition: opacity 0.1s, border-color 0.1s;
+      }
+      .card:hover { border-color: #4a90ff; }
+      .card.greyed { opacity: 0.42; }
+      .card.selected { border-color: #ffe66a; box-shadow: 0 0 0 1px #ffe66a, 0 0 10px rgba(255, 230, 106, 0.35); }
+      .card-h { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+      .card-h .abbr {
+        font-weight: 800; font-size: 11px; color: #06203a; background: var(--side, #4a90ff);
+        border-radius: 4px; width: 16px; height: 16px; line-height: 16px; text-align: center; flex: 0 0 auto;
+      }
+      .card-h .nm { font-size: 11px; font-weight: 600; color: #eaf0ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .card-h .tag { margin-left: auto; font-size: 9px; font-weight: 700; color: #8ea0c4; letter-spacing: 0.5px; }
+      .meter { display: flex; align-items: center; gap: 5px; margin: 2px 0; }
+      .meter .ml { font-size: 8px; color: #7e8eae; width: 30px; flex: 0 0 auto; }
+      .meter .mt { flex: 1; height: 5px; background: #1a2235; border-radius: 3px; overflow: hidden; }
+      .meter .mf { display: block; height: 100%; }
+      .intent { font-size: 9.5px; color: #9fd0ff; margin-top: 4px; line-height: 1.25; }
+      .status { font-size: 9.5px; color: #ffb27a; margin-top: 3px; }
     </style>
   </head>
   <body>
     <div id="app"></div>
     <div id="hud">VANTAGE</div>
+    <div id="bar"></div>
+    <div id="cards"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

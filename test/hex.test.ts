@@ -8,6 +8,7 @@ import {
   hexToWorld,
   neighbor,
   neighbors,
+  worldToHex,
   type Direction,
   type Hex,
 } from "../src/sim/hex";
@@ -78,5 +79,20 @@ describe("world placement (flat-top)", () => {
     expect(o.z).toBeCloseTo(0, 6);
     const east = hexToWorld({ q: 1, r: 0 }, 1);
     expect(east.x).toBeCloseTo(1.5, 6); // flat-top column spacing = 1.5 * size
+  });
+
+  it("worldToHex inverts hexToWorld (a board click recovers its hex)", () => {
+    // Round-trip a spread of hexes through world space and back; the centre, and
+    // points jittered around it, must resolve to the same hex (it's what turns a
+    // raycast hit into a move target).
+    for (let q = -6; q <= 6; q++) {
+      for (let r = -6; r <= 6; r++) {
+        const h: Hex = { q, r };
+        const w = hexToWorld(h, 1);
+        expect(worldToHex(w.x, w.z, 1)).toEqual(h);
+        // Small offsets toward (but not past) the edge still snap to the centre.
+        expect(worldToHex(w.x + 0.2, w.z - 0.2, 1)).toEqual(h);
+      }
+    }
   });
 });

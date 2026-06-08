@@ -109,8 +109,26 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
 > invariant is violated and every match terminates, the commander exposes a
 > human-readable intent each turn, and the harness runs headless + captures
 > board screenshots.
-- **Slice 6 — Interactive UI**
-  Minimal click-to-act layer feeding the same action API.
+- **Slice 6 — Interactive UI** ✅ (UI-1)
+  A hands-on click-to-act layer over the existing action API — the human stand-in
+  for the runMatch "player" policy, so play and the harness share one seam. The
+  player commands ONLY their own units (`controller === "player"`); the mechs and
+  the enemy stay AI (`commandForce`). Flow is BattleTech-style: select a unit
+  (board marker via raycast, or its bottom-centre info card), its reachable hexes
+  light up (blue), click one to move, then click a red enemy to fire / a green
+  ally to resupply. "End Phase" hands the phase to the AI for both sides then
+  advances — the same per-phase ordering as `runMatch` (player acts, then
+  commandForce blue/red, then nextPhase). Cards show structure/fuel/ammo, supply
+  + shaken status, and the mech's commander intent; not-ready units (spent, or
+  off-phase) grey out on the board and in the cards.
+  - Rules-facing logic is pure + unit-tested (`ui/control.ts`: readiness,
+    move/attack/resupply options, card model); the DOM/Three shell
+    (`ui/interactive.ts`) is verified by screenshot. `render/overlay.ts` draws the
+    range/target highlights; `hex.worldToHex` turns a board click into a hex
+    (round-trip tested). Headless URL modes (coreproof / skirmish) still render a
+    static board for the capture harness.
+  - Deferred to UI-2: per-weapon target picking + hit-chance preview, explicit
+    facing after a move, undo, and camera pan/zoom.
 
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { GameState, UnitInstance } from "../sim/state";
-import { hexCorners, hexKey, hexToWorld, neighbor } from "../sim/hex";
+import { hexCorners, hexKey, hexToWorld, neighbor, type Hex } from "../sim/hex";
 import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
 import type { UnitClass } from "../data/types";
@@ -10,8 +10,21 @@ import type { UnitClass } from "../data/types";
 // grid overlay, the objective zone, and programmer-art unit markers that show
 // side, class and facing. Pure read of state → a THREE.Group.
 
-const ELEV = 1.2; // world height per elevation unit
+export const ELEV = 1.2; // world height per elevation unit
 const LIFT = 0.03; // grid/zone offset above the surface to avoid z-fighting
+
+/** Surface height (world Y) at a hex centre — where unit markers and overlays
+ *  sit. Mirrors marker placement so selection/range overlays land on the ground. */
+export function hexSurfaceY(state: GameState, h: Hex): number {
+  return (state.cells.get(hexKey(h))?.elevation ?? 0) * ELEV;
+}
+
+/** Optional interactive decoration: which unit ids to dim (spent / not the
+ *  player's to order) and which one is selected (gets a highlight ring). */
+export interface BoardOpts {
+  dim?: Set<number>;
+  selectedId?: number | null;
+}
 const SIDE_COLOR: Record<string, number> = { blue: 0x4a90ff, red: 0xff5a4a };
 
 interface ClassStyle {
@@ -66,7 +79,7 @@ function smoothNormals(positions: number[]): number[] {
   return out;
 }
 
-export function buildBoard(state: GameState): Board {
+export function buildBoard(state: GameState, opts: BoardOpts = {}): Board {
   const group = new THREE.Group();
   const size = state.map.hexSize;
   const corners = hexCorners(size);
@@ -133,6 +146,7 @@ export function buildBoard(state: GameState): Board {
       side: THREE.DoubleSide,
     }),
   );
+  surface.name = "terrain"; // the interactive UI raycasts this to map a click → hex
   group.add(surface);
 
   // ── Hex grid overlay. ──
@@ -173,7 +187,8 @@ export function buildBoard(state: GameState): Board {
     if (u.structure <= 0) continue;
     const cell = state.cells.get(hexKey(u.hex));
     const intent = unitType(u.typeId).cls === "mech" ? state.intents[u.id] : undefined;
-    group.add(buildUnitMarker(u, size, (cell?.elevation ?? 0) * ELEV, intent));
+    const dim = opts.dim?.has(u.id) ?? false;
+    group.add(buildUnitMarker(u, size, (cell?.elevation ?? 0) * ELEV, intent, dim, opts.selectedId === u.id));
   }
 
   min.y = 0;
@@ -181,8 +196,9 @@ export function buildBoard(state: GameState): Board {
   return { group, min, max };
 }
 
-function buildUnitMarker(u: UnitInstance, size: number, lift: number, intent?: string): THREE.Group {
+function buildUnitMarker(u: UnitInstance, size: number, lift: number, intent: string | undefined, dim: boolean, selected: boolean): THREE.Group {
   const g = new THREE.Group();
+  g.userData.unitId = u.id; // raycast target → which unit was clicked
   const t = unitType(u.typeId);
   const style = CLASS_STYLE[t.cls];
   const c = hexToWorld(u.hex, size);
@@ -190,10 +206,28 @@ function buildUnitMarker(u: UnitInstance, size: number, lift: number, intent?: s
   const color = SIDE_COLOR[u.side];
   const body = new THREE.Mesh(
     style.geo(),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.5, emissive: new THREE.Color(color).multiplyScalar(0.15) }),
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.5,
+      emissive: new THREE.Color(color).multiplyScalar(selected ? 0.5 : 0.15),
+      transparent: dim,
+      opacity: dim ? 0.4 : 1, // spent / non-orderable units read as greyed
+    }),
   );
   body.position.set(0, 0.45, 0);
+  body.userData.unitId = u.id;
   g.add(body);
+
+  if (selected) {
+    // A bright ring under the selected unit so the pick reads at a glance.
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(size * 0.62, size * 0.82, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffe66a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(0, 0.06, 0);
+    g.add(ring);
+  }
 
   // Facing prong — points toward the faced neighbour.
   const here = hexToWorld(u.hex, size);
