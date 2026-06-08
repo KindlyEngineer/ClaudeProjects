@@ -100,23 +100,28 @@ const E: Direction = 0; // facing east (toward the objective)
 const W: Direction = 3; // facing west (defenders watch the approach)
 
 // Placements authored in offset (col,row) for readability, converted to axial.
-const place = (type: string, side: "blue" | "red", col: number, row: number, facing: Direction): UnitPlacement => ({
-  type,
-  side,
-  hex: offsetToAxial(col, row),
-  facing,
-});
+// `controller` is the campaign designer's call: in VANTAGE's canonical setup the
+// blue mech is AI (the main effort the player only shapes) and blue support is
+// player-run; the whole red force is AI.
+const place = (
+  type: string,
+  side: "blue" | "red",
+  col: number,
+  row: number,
+  facing: Direction,
+  controller: "ai" | "player" = "ai",
+): UnitPlacement => ({ type, side, hex: offsetToAxial(col, row), facing, controller });
 
 const units: UnitPlacement[] = [
   // Blue: one AI mech (main effort) + the player's support/logistics effort.
-  place("mech_assault", "blue", 1, 9, E),
-  place("recon", "blue", 2, 5, E),
-  place("armor", "blue", 1, 12, E),
-  place("infantry", "blue", 0, 7, E),
-  place("artillery", "blue", 0, 11, E),
-  place("supply", "blue", 0, 9, E),
+  place("mech_assault", "blue", 1, 9, E, "ai"),
+  place("recon", "blue", 2, 5, E, "player"),
+  place("armor", "blue", 1, 12, E, "player"),
+  place("infantry", "blue", 0, 7, E, "player"),
+  place("artillery", "blue", 0, 11, E, "player"),
+  place("supply", "blue", 0, 9, E, "player"),
 
-  // Red: a detachment dug in around the urban objective.
+  // Red: an entirely AI-run detachment dug in around the urban objective.
   place("mech_assault", "red", 23, 9, W),
   place("infantry", "red", 22, 8, W),
   place("armor", "red", 24, 11, W),

@@ -3,9 +3,9 @@ import { createView } from "./render/view";
 import { buildBoard } from "./render/board";
 import { createGame, livingUnits } from "./sim/state";
 import { updateSupply } from "./sim/logistics";
-import { decideMech } from "./sim/commander";
+import { decideUnit } from "./sim/ai";
 import { scriptedSkirmish } from "./sim/demo";
-import { noSupport, playerSupport, redDefense, runMatch } from "./sim/match";
+import { noSupport, playerSupport, runMatch } from "./sim/match";
 import { unitType } from "./data/units";
 import { MAP01 } from "./data/maps/map01";
 
@@ -28,14 +28,14 @@ if (params.get("scenario") === "coreproof") {
   // The core-proof match to a result. ?support=off → unsupported (mechs fail);
   // otherwise the full player support plan (mechs seize).
   const support = params.get("support") !== "off";
-  runMatch(state, support ? playerSupport : noSupport, redDefense);
+  runMatch(state, support ? playerSupport : noSupport);
 } else if (params.get("demo") === "skirmish") {
   scriptedSkirmish(state, Number(params.get("turns") ?? 6));
 } else {
   updateSupply(state);
   // Surface each mech's opening commander intent on the static board too.
   for (const m of livingUnits(state)) {
-    if (unitType(m.typeId).cls === "mech") state.intents[m.id] = decideMech(state, m).intent;
+    if (m.controller === "ai") state.intents[m.id] = decideUnit(state, m).intent;
   }
 }
 const board = buildBoard(state);

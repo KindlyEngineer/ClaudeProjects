@@ -112,7 +112,95 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
 - **Slice 6 — Interactive UI**
   Minimal click-to-act layer feeding the same action API.
 
-Then v1 (full mirror, enabler AI, Breakthrough, bulk self-play) per brief §5.
+## AI milestone (the v1 core — sound, role-aware, fog-limited)
+
+Per the owner: the AI must (a) never behave tactically/logically unsoundly for
+either side, and (b) command *any* unit assigned to it (set per-unit in scenario
+data via `controller`), understanding each role's capabilities and limits. It
+plans coordinated + adaptive — but only on what it KNOWS (current sight + decayed
+memory), never ground truth. Staged, gated:
+
+- **AI-1 — Fog-limited knowledge + controller model** ✅
+  Per-side **belief** (`sim/knowledge.ts`): `updateBelief` each turn records
+  visible enemies as fresh sightings and remembers the rest at their last-known
+  hex, forgetting them after `memoryTurns`. The commander now positions on
+  *belief* (cautious around remembered threats) and fires only on what's *visibly*
+  there. A `controller` ("ai"/"player") is set per unit in scenario data
+  (`data/maps`); v0 keeps the brief's split (blue mech AI, blue support player,
+  red all AI). Verified: 4 belief/controller tests (70 total); the core proof
+  still holds (0/20 unaided, 16/20 with support).
+- **AI-2 — Role-aware force AI** ✅
+  One AI (`sim/ai.ts`) — `commandForce(side)` — drives every `ai` unit by role on
+  an **extensible consideration scorer**: each factor (objective, seize, supply
+  pull, exposure, attack, cover, standoff, mutual-support, near-needy, …) is a
+  named function with a per-role weight, summed to pick a hex; adding a factor
+  (terrain/battlefield effects, ZOC) = add a consideration + weights, no rewrite.
+  Roles: recon scouts at standoff, artillery suppresses from range, armour/mech
+  seek **flanks**, infantry holds cover, supply sustains. **Capability/limitation
+  soundness:** `shotValue` only values shots that penetrate (flanks score higher)
+  or suppress — never futile ones; crits/ammo/fuel/supply respected; pathing
+  avoids impassable. The match is now controller-based (the scripted red policy
+  is retired — red is the AI). Verified: penetration/flank targeting test + an
+  AI-vs-AI **self-play** suite (both sides fully AI across 10 seeds: always
+  terminates, no negative resources) — 72 total — and the core proof is now
+  decisive (no-support **0/20**, with-support **20/20**, via focus-fire support).
+
+> **Deferred, seam-ready: a configurable LLM (e.g. DeepSeek) policy.** Not built —
+> it would break the deterministic/seedable/self-play foundation if placed in the
+> per-turn loop. The AI decision boundary (`decideUnit`) is the seam; an LLM fits
+> best as (1) offline dev tooling (scenario/balance generation, self-play log
+> analysis), (2) after-action narration, or (3) an opt-in non-reproducible policy
+> excluded from tests/self-play. Env-configured, network-allowlisted, with the
+> deterministic AI as fallback. Revisit when there's a concrete use.
+- **AI-3 — Coordinated + adaptive planning** *(in progress)*
+  A per-turn force plan (`sim/plan.ts`) assigns each unit a **task** (hold a
+  prepared position / screen / rove / rear). It is **deterministic yet varied**:
+  seeded "AI noise" (per seed/turn/side) picks posture, how far forward to set
+  up, and positions — so the same seed replays identically (self-play/tests
+  hold) but no two seeds play the same and the AI isn't a rote, exploitable
+  pattern. A defender no longer clumps on the point: it occupies cover/overwatch
+  positions, holds its supply to the rear, and sometimes **roves** the mech to
+  better ground instead of sitting. The unit AI consumes the task as its goal
+  (reusing the AI-2 consideration scorer). The attacker stays objective-seeking.
+  - **AI-3a — Varied, proactive positioning** ✅ — planner + tasks + seeded
+    variety; 4 plan tests (determinism, cross-seed variety, dispersed prepared
+    positions, attacker untouched) — 76 total. With the now-competent defender,
+    the core proof is decisive but realistic: unaided **0/20**, with support
+    **~16/24 (≥12/20)** — the defender sometimes holds even a supported attack.
+  - **AI-3b — Information-gated proactivity** ✅ — aggression is *earned, never
+    assumed*. A side rates its situation (`sim/assess.ts`) from belief ONLY: own
+    force (fully known) vs the enemy it has *perceived*, inflating the unknown —
+    unscouted ground around a contact is assumed to hide support, so a thin
+    picture can't justify an attack. A posture state machine (with hysteresis,
+    in `state.posture`, updated each turn) runs **hold → probe → counter**: with
+    no good picture the defender PROBES with recon to gain contact; only once it
+    has scouted around the spearhead AND perceives a favourable ratio does it
+    COUNTERATTACK; against a supported attack it perceives no edge and holds.
+    Tasks `probe`/`counter` modulate the unit AI (a counterattack commits hard).
+    Verified: 4 assessment tests (no-contact→probe, scouted-isolated→counter,
+    scouted-strong→hold, determinism) — 80 total. In-match the counter fires
+    only opportunistically (an isolated, pressing attacker) — never reflexive.
+  - **AI-3c — Adaptivity, fire concentration & bulk self-play** ✅
+    *Adaptivity:* the attacker maneuvers against the perceived **weak point** —
+    `leastDefendedZoneHex` picks the zone hex least covered by *believed*
+    defenders, recomputed each turn so the axis SHIFTS if the defence repositions
+    (the force gets `advance` tasks toward it; fire-support/recon/supply keep
+    their roles). *Coordination:* units **concentrate fire** on a shared force
+    priority (the most dangerous visible enemy) instead of each plinking its
+    local best. *Harness:* `tools/selfplay.ts` (`npm run selfplay [N]`) runs bulk
+    AI-vs-AI and reports the outcome split, match length and invariant
+    violations. Verified: adaptive-axis test (axis tracks belief) — 81 total —
+    and bulk self-play is **sound**: across 200+ matches every match terminates
+    within the cap with **zero** invariant violations.
+    > **Known, scoped to v1:** AI-vs-AI on this single asymmetric Seize map is
+    > defender-favoured (attacker ~1%): the AI *enabler* doesn't yet conduct the
+    > supported attack as well as a skilled player (it loses its forward observer,
+    > so fires can't suppress, and the spearhead outruns its supply). Per brief
+    > §5 the AI enabler module + self-play balance (~50–65%) are v1 work; v0's
+    > harness role — termination/crash/invariant verification — is fully met. The
+    > player-supported proof is unaffected (no-support 0/24, with-support 18/24).
+
+Then the rest of v1 (Breakthrough objective, more units/maps in data) per brief §5.
 
 ## Verification loop
 Per change: `typecheck → vitest → build → screenshot / headless run`. From the

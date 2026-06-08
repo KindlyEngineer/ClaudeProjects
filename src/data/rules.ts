@@ -38,5 +38,13 @@ export const RULES = {
     supportReduction: 0.22, // per nearby friendly support unit
     supportRadius: 3,
     fogCaution: 2.6, // exposure added for advancing into UNSCOUTED hexes (no recon → cautious)
+    memoryTurns: 4, // how long a last-known enemy sighting is remembered after losing sight
+    // Aggression is EARNED, never assumed (information-gated). A defender goes
+    // over to the attack only once it has scouted enough to be confident AND
+    // perceives a favourable force ratio.
+    counterAdvantage: 1.6, // perceived strength ratio needed to commit a counterattack
+    counterHysteresis: 1.2, // stay committed while the ratio holds above this
+    minScoutToCommit: 0.45, // fraction of the approach corridor that must be scouted first
+    unknownStrength: 26, // assumed hidden enemy strength per fully-unscouted corridor
   },
 } as const;
