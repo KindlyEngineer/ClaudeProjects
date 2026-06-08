@@ -2,6 +2,7 @@ import { RULES } from "../data/rules";
 import type { Side } from "../data/types";
 import { unitType } from "../data/units";
 import { hexDistance, type Hex } from "./hex";
+import { aiNoise } from "./ainoise";
 import { believedEnemies, visibleSightings } from "./knowledge";
 import { hasCrit, livingUnits, type GameState, type PostureState, type Sighting, type UnitInstance } from "./state";
 import { isScouted } from "./vision";
@@ -84,7 +85,10 @@ export function assess(state: GameState, side: Side): Assessment {
   const own = ownStrength(livingUnits(state, side));
   const hidden = (1 - scouted) * RULES.commander.unknownStrength; // unseen ground may hide support
   const enemy = believedStrength(believed) + hidden;
-  const advantage = own / Math.max(1, enemy);
+  // Fallible commanders misjudge the odds (seeded, ± and scaled by 1 - skill):
+  // sometimes over-confident, sometimes timid.
+  const err = (aiNoise(state, side, 7717) - 0.5) * 2 * (1 - state.skill[side]) * RULES.commander.assessError;
+  const advantage = (own / Math.max(1, enemy)) * (1 + err);
 
   return { advantage, scouted, haveContact: visible.length > 0, targetId: target?.id ?? null };
 }

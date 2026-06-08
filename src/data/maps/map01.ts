@@ -141,4 +141,10 @@ export const MAP01: MapDef = {
   cells: buildCells(),
   units,
   objective: { kind: "seize", turnLimit: 18, zone, attacker: "blue" },
+  // Skill is a tunable difficulty per side. The player's allied main effort is
+  // dependable (1.0) so the proof is clean; the ENEMY is fallible (0.65) — it
+  // misjudges and missteps, so the player has room and isn't forced into the one
+  // "correct" line. (A scenario could make the ally fallible too, for a harder
+  // "manage a sloppy ally" fight.)
+  commanderSkill: { blue: 1.0, red: 0.65 },
 };

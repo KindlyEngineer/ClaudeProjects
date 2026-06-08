@@ -10,6 +10,7 @@ import { pathTo, reachable } from "./pathing";
 import { canMove, livingUnits, terrainAt, type GameState, type UnitInstance } from "./state";
 import { isEligible } from "./turn";
 import { isScouted } from "./vision";
+import { aiNoise } from "./ainoise";
 import { planForce, type Task } from "./plan";
 
 // The force AI: ONE capability-aware, fog-limited brain that commands whatever
@@ -282,19 +283,27 @@ export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): U
 
   const mobile = canMove(unit);
   const reach = reachable(state, unit);
-  let bestKey = hexKey(unit.hex);
-  let bestHex = unit.hex;
-  let bestScore = mobile ? -Infinity : score(unit.hex);
-  if (mobile) {
-    for (const [k, node] of reach) {
-      const s = score(node.hex);
-      if (s > bestScore || (s === bestScore && k < bestKey)) {
-        bestScore = s;
-        bestKey = k;
-        bestHex = node.hex;
-      }
-    }
+  const cands: Array<{ key: string; hex: Hex; score: number }> = [];
+  if (mobile) for (const [k, node] of reach) cands.push({ key: k, hex: node.hex, score: score(node.hex) });
+  else cands.push({ key: hexKey(unit.hex), hex: unit.hex, score: score(unit.hex) });
+
+  let best = cands[0];
+  for (const c of cands) if (c.score > best.score || (c.score === best.score && c.key < best.key)) best = c;
+
+  // Fallibility: a less-than-perfect commander may take a good-but-not-best move
+  // — a misstep, never a blunder (always within the satisfice band of the best),
+  // and seeded so it's deterministic. At skill 1 the band is 0 → always optimal.
+  let chosen = best;
+  const band = (1 - state.skill[side]) * RULES.commander.satisficeBand;
+  if (band > 0) {
+    const eligible = cands
+      .filter((c) => c.score >= best.score - band)
+      .sort((a, b) => b.score - a.score || (a.key < b.key ? -1 : 1));
+    const n = aiNoise(state, side, unit.id);
+    chosen = eligible[Math.min((n * n * eligible.length) | 0, eligible.length - 1)]; // biased toward the top
   }
+  const bestKey = chosen.key;
+  const bestHex = chosen.hex;
 
   const path = mobile ? pathTo(reach, bestKey) : [];
   const fireTargetId = pickTarget(unit, bestHex, visible);

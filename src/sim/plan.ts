@@ -1,8 +1,8 @@
-import { mulberry32Step } from "../core/rng";
 import { terrain } from "../data/terrain";
 import type { Side } from "../data/types";
 import { unitType } from "../data/units";
 import { hexDistance, hexKey, type Hex } from "./hex";
+import { aiNoise } from "./ainoise";
 import { believedEnemies } from "./knowledge";
 import { livingUnits, type GameState } from "./state";
 
@@ -23,18 +23,6 @@ export interface Task {
 
 export interface ForcePlan {
   tasks: Map<number, Task>;
-}
-
-/** Deterministic per-(seed, turn, side, salt) value in [0,1). Different seeds →
- *  different choices; same seed → identical. */
-export function aiNoise(state: GameState, side: Side, salt: number): number {
-  const h =
-    (Math.imul(state.seed | 1, 2654435761) ^
-      Math.imul(state.turn + 1, 40503) ^
-      (side === "blue" ? 0x9e3779b1 : 0x85ebca6b) ^
-      Math.imul(salt + 1, 668265263)) |
-    0;
-  return mulberry32Step(h).value;
 }
 
 function centroid(hexes: readonly Hex[]): Hex {

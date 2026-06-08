@@ -200,7 +200,28 @@ memory), never ground truth. Staged, gated:
     > harness role — termination/crash/invariant verification — is fully met. The
     > player-supported proof is unaffected (no-support 0/24, with-support 18/24).
 
-Then the rest of v1 (Breakthrough objective, more units/maps in data) per brief §5.
+## v1 (in progress)
+
+- **V1-A — AI fallibility / skill** ✅
+  Commanders aren't perfect (else the player has no slack to exploit). Imperfection
+  is **seeded and bounded**: the unit AI *satisfices* — it may take any move within
+  a `satisficeBand` of the best (a misstep, never a blunder), chosen by seeded AI
+  noise — and the assessment carries a seeded ± `assessError`. Both scale by
+  `1 - skill`, a **designer-set per-side difficulty** (`MapDef.commanderSkill`).
+  At skill 1 the band is 0 → exactly optimal (what every other test relies on).
+  Determinism is preserved (unit ids are now reset per game, since an id seeds
+  the noise). v0's map ships a **dependable ally (1.0) + fallible enemy (0.65)**:
+  the proof stays clean (no-support 0/20, with-support 18/20) while the *opponent*
+  the player faces misjudges and missteps — so there's never one "correct" line.
+  3 fallibility tests (determinism-when-fallible, bounded missteps, exact-at-1).
+- **V1-B — Competent attacker enabler** *(next)* — force-level attack competence
+  (protect the forward observer → suppress → sustain → commit) so AI-vs-AI is a
+  real contest and the enemy can attack.
+- **V1-C — Breakthrough objective + the mirror**; **V1-D — content + self-play
+  balance**. Plus the deferred interactive UI and the LLM-policy seam (above).
+
+(Brief §5: full mirror + enabler, all six commander inputs each tested, Seize +
+Breakthrough, 2–3 maps, bulk self-play balance ~50–65%.)
 
 ## Verification loop
 Per change: `typecheck → vitest → build → screenshot / headless run`. From the

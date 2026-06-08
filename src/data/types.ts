@@ -98,4 +98,7 @@ export interface MapDef {
   readonly cells: readonly MapCell[];
   readonly units: readonly UnitPlacement[];
   readonly objective: ObjectiveDef;
+  /** Commander skill per side in (0,1] — 1 = near-flawless, lower = more
+   *  fallible (a designer-set difficulty). Defaults to 1 if omitted. */
+  readonly commanderSkill?: { readonly blue?: number; readonly red?: number };
 }
