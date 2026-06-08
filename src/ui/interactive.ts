@@ -1,12 +1,12 @@
 import * as THREE from "three";
 import type { View } from "../render/view";
-import { buildBoard } from "../render/board";
+import { buildBoard, hexSurfaceY } from "../render/board";
 import { buildFacingPicker, buildHexOverlay } from "../render/overlay";
 import type { Side } from "../data/types";
 import { moveUnit, attackUnit, resupplyUnit } from "../sim/actions";
 import { commandForce, decideUnit } from "../sim/ai";
 import { planForce } from "../sim/plan";
-import { directionTo, hexKey, worldToHex, type Direction, type Hex } from "../sim/hex";
+import { directionTo, hexKey, hexToWorld, neighbor, worldToHex, type Direction, type Hex } from "../sim/hex";
 import { evaluateOutcome } from "../sim/objective";
 import { pathTo, reachable, type ReachNode } from "../sim/pathing";
 import { livingUnits, unitAt, type GameState, type UnitInstance } from "../sim/state";
@@ -15,12 +15,14 @@ import { attackOptions, forceCards, readyToOrder, resupplyOptions, type CardMode
 
 // The interactive controller — the human stand-in for the runMatch "player"
 // policy. It drives the sim through ONLY the shared action API and only over the
-// player's own units; the mechs and the enemy stay AI (commandForce). Selection
-// and command follow a BattleTech-style flow: pick a unit (board marker or card),
-// its reachable hexes light up, click one to move, then click an enemy to fire
-// (or, for supply, an adjacent friendly to resupply). "End Phase" hands the phase
-// to the AI for both sides and advances, mirroring runMatch's per-phase ordering
-// (player acts, then commandForce blue/red, then nextPhase).
+// player's own units; the mechs and the enemy stay AI (commandForce). Command
+// follows BattleTech (2018): pick a unit (board marker or card), its reachable
+// hexes light up; PRESS-AND-HOLD a destination, DRAG to aim which hex face the
+// unit ends up fronting, and RELEASE to lock it in and execute the move. A plain
+// click (no drag) on an enemy fires; on a friendly (supply) resupplies; on a
+// unit selects it. "End Phase" hands the phase to the AI for both sides and
+// advances, mirroring runMatch's per-phase ordering (player acts, then
+// commandForce blue/red, then nextPhase).
 
 interface Options {
   reach: Map<string, ReachNode>;
@@ -31,18 +33,19 @@ interface Options {
 
 const EMPTY_OPTIONS: Options = { reach: new Map(), moveKeys: new Set(), attack: new Map(), resupply: new Set() };
 
-// A move the player has positioned but not yet committed: the destination and
-// route are fixed; they must still choose the final facing before it executes.
+// A move being aimed: destination + route are fixed; `facing` tracks the mouse
+// live during the press-drag and is the value committed on release.
 interface PendingMove {
   dest: Hex;
   path: Hex[];
-  natural: Direction; // the travel-direction facing, offered as the default
+  facing: Direction; // current aimed facing (starts at the travel direction)
 }
 
 export function startInteractive(view: View, state: GameState, opts: { selectId?: number; playerSide?: Side; stage?: boolean } = {}): void {
   const playerSide: Side = opts.playerSide ?? "blue";
   let selectedId: number | null = opts.selectId ?? null;
   let pendingMove: PendingMove | null = null;
+  let dragging = false; // mid press-drag-release facing gesture
   let framed = false;
 
   // Opening intents so the mech banners read on turn 1 (decideUnit is pure).
@@ -105,13 +108,25 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     renderHud();
   }
 
+  /** Rebuild ONLY the overlay group (cheap) — used while dragging the facing so
+   *  the board geometry/cards aren't re-created on every mouse move. */
+  function refreshOverlays(): void {
+    if (overlayGroup) {
+      view.scene.remove(overlayGroup);
+      disposeGroup(overlayGroup);
+    }
+    overlayGroup = buildSelectionOverlays();
+    view.scene.add(overlayGroup);
+    renderBar();
+  }
+
   function buildSelectionOverlays(): THREE.Group {
     const g = new THREE.Group();
-    // While a move is staged, the board shows only the destination + the facing
-    // choices — the player commits the move by picking which way to front.
+    // While aiming a move, the board shows only the destination + the facing
+    // rosette, with the currently aimed face highlighted (it tracks the mouse).
     if (pendingMove) {
       g.add(buildHexOverlay(state, [pendingMove.dest], 0xffe66a, 0.4));
-      g.add(buildFacingPicker(state, pendingMove.dest, pendingMove.natural));
+      g.add(buildFacingPicker(state, pendingMove.dest, pendingMove.facing));
       return g;
     }
     const o = currentOptions();
@@ -133,76 +148,109 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     return g;
   }
 
-  // ── Click handling ─────────────────────────────────────────────────────────
-  function onClick(ev: MouseEvent): void {
-    if (state.outcome !== "ongoing") return;
+  // ── Input: press-drag-release (BattleTech-style move + facing) ───────────────
+  function setRay(ev: MouseEvent): void {
     const rect = view.renderer.domElement.getBoundingClientRect();
     pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(pointer, view.camera);
+  }
 
+  /** Press: on a reachable hex (with a ready unit) begin aiming a move; otherwise
+   *  fire / resupply / select / deselect immediately (a plain click). */
+  function onPointerDown(ev: MouseEvent): void {
+    if (state.outcome !== "ongoing" || ev.button !== 0) return;
+    pendingMove = null; // clear any stale (e.g. screenshot-staged) aim
+    setRay(ev);
     const sel = selectedUnit();
     const o = sel && readyToOrder(state, sel) ? currentOptions() : EMPTY_OPTIONS;
 
-    // A move is staged: the next click sets the final facing (commit), re-routes
-    // to another reachable hex, or — anything else — cancels back to the range.
-    if (pendingMove && sel) {
-      const facing = pickFacing();
-      if (facing !== null) {
-        moveUnit(state, sel, pendingMove.path, facing); // commit with chosen facing
-        pendingMove = null;
-        checkOutcome();
-        rebuild();
-        return;
-      }
-      const hex = pickHex();
-      if (hex && o.moveKeys.has(hexKey(hex)) && unitAt(state, hex) == null) {
-        pendingMove = stageMove(o, hex);
-        rebuild();
-        return;
-      }
-      pendingMove = null; // cancel — fall through to normal selection handling
+    const clickedHex = pickHex();
+    // Begin the move-aim gesture when pressing an empty reachable hex.
+    if (sel && clickedHex && o.moveKeys.has(hexKey(clickedHex)) && unitAt(state, clickedHex) == null) {
+      ev.preventDefault();
+      pendingMove = stageMove(o, clickedHex);
+      dragging = true;
+      refreshOverlays();
+      return;
     }
 
-    const clickedUnitId = pickUnit();
-    const clickedHex = pickHex();
-    // A click on a unit's ground hex (not its floating marker) still resolves to
-    // that unit, so selecting by clicking the hex works too.
-    const onHexUnit = clickedHex ? unitAt(state, clickedHex)?.id ?? null : null;
-    const unitId = clickedUnitId ?? onHexUnit;
-
+    const unitId = pickUnit() ?? (clickedHex ? unitAt(state, clickedHex)?.id ?? null : null);
     if (sel && unitId != null && o.attack.has(unitId)) {
-      const target = livingUnits(state).find((u) => u.id === unitId)!;
-      attackUnit(state, sel, o.attack.get(unitId)!, target);
+      attackUnit(state, sel, o.attack.get(unitId)!, livingUnits(state).find((u) => u.id === unitId)!);
     } else if (sel && unitId != null && o.resupply.has(unitId)) {
-      const target = livingUnits(state).find((u) => u.id === unitId)!;
-      resupplyUnit(state, sel, target);
-    } else if (sel && clickedHex && o.moveKeys.has(hexKey(clickedHex)) && onHexUnit == null) {
-      pendingMove = stageMove(o, clickedHex); // choose a destination → now pick a facing
+      resupplyUnit(state, sel, livingUnits(state).find((u) => u.id === unitId)!);
     } else if (unitId != null) {
       selectedId = unitId; // select (any unit can be inspected; only ready ones get orders)
     } else {
-      selectedId = null; // clicked empty ground → deselect
+      selectedId = null; // pressed empty ground → deselect
     }
     checkOutcome();
     rebuild();
   }
 
-  /** Stage a move to `dest` (route + the default travel-direction facing). */
+  /** Drag: aim the final facing toward the cursor (snap to the nearest hex face). */
+  function onPointerMove(ev: MouseEvent): void {
+    if (!dragging || !pendingMove) return;
+    setRay(ev);
+    const f = facingTowardCursor(pendingMove.dest, pendingMove.facing);
+    if (f !== pendingMove.facing) {
+      pendingMove.facing = f;
+      refreshOverlays();
+    }
+  }
+
+  /** Release: lock in the aimed facing and execute the move. */
+  function onPointerUp(ev: MouseEvent): void {
+    if (!dragging) return;
+    dragging = false;
+    if (ev.button !== 0 || !pendingMove) {
+      pendingMove = null;
+      rebuild();
+      return;
+    }
+    setRay(ev);
+    pendingMove.facing = facingTowardCursor(pendingMove.dest, pendingMove.facing);
+    const sel = selectedUnit();
+    if (sel) moveUnit(state, sel, pendingMove.path, pendingMove.facing);
+    pendingMove = null;
+    checkOutcome();
+    rebuild();
+  }
+
+  /** Stage a move to `dest` (route + initial facing = the travel direction). */
   function stageMove(o: Options, dest: Hex): PendingMove {
     const path = pathTo(o.reach, hexKey(dest));
     const from = path.length >= 2 ? path[path.length - 2] : selectedUnit()!.hex;
-    return { dest, path, natural: directionTo(from, dest) };
+    return { dest, path, facing: directionTo(from, dest) };
   }
 
-  /** The facing arrow under the pointer (a staged move's picker), or null. */
-  function pickFacing(): Direction | null {
-    if (!overlayGroup) return null;
-    for (const hit of raycaster.intersectObject(overlayGroup, true)) {
-      const f = hit.object.userData.facing;
-      if (f !== undefined) return f as Direction;
+  /** The hex face nearest the direction from `dest`'s centre to the cursor's
+   *  point on the ground plane — how a drag aims the final facing. Falls back to
+   *  `current` when the cursor is right over the centre (no clear direction). */
+  function facingTowardCursor(dest: Hex, current: Direction): Direction {
+    const size = state.map.hexSize;
+    const c = hexToWorld(dest, size);
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -hexSurfaceY(state, dest));
+    const hit = raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+    if (!hit) return current;
+    const dx = hit.x - c.x;
+    const dz = hit.z - c.z;
+    if (dx * dx + dz * dz < (size * 0.2) ** 2) return current; // too close to aim
+    let best: Direction = current;
+    let bestDot = -Infinity;
+    for (let d = 0; d < 6; d++) {
+      const nb = hexToWorld(neighbor(dest, d as Direction), size);
+      const ndx = nb.x - c.x;
+      const ndz = nb.z - c.z;
+      const len = Math.hypot(ndx, ndz) || 1;
+      const dot = (dx * ndx + dz * ndz) / len;
+      if (dot > bestDot) {
+        bestDot = dot;
+        best = d as Direction;
+      }
     }
-    return null;
+    return best;
   }
 
   /** Nearest unit marker under the pointer, or null. */
@@ -243,6 +291,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     checkOutcome();
     selectedId = null;
     pendingMove = null;
+    dragging = false;
     rebuild();
   }
 
@@ -297,9 +346,9 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     hint.textContent = decided
       ? ""
       : pendingMove
-        ? "Click an arrow to set the unit's final facing (or another blue hex to re-route)"
+        ? "Drag to aim the unit's final facing — release to confirm"
         : sel && readyToOrder(state, sel)
-          ? "Click a blue hex to move · red enemy to fire · green ally to resupply"
+          ? "Press & hold a blue hex then drag to face · click a red enemy to fire · green ally to resupply"
           : "Select one of your support units (board or card)";
     barEl.appendChild(hint);
 
@@ -331,7 +380,12 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     }
   }
 
-  view.renderer.domElement.addEventListener("click", onClick);
+  view.renderer.domElement.addEventListener("mousedown", onPointerDown);
+  // Track drag + release on the window so a gesture that leaves the canvas (or
+  // releases over a HUD element) still aims and commits correctly.
+  window.addEventListener("mousemove", onPointerMove);
+  window.addEventListener("mouseup", onPointerUp);
+  view.renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
   rebuild();
 }
 

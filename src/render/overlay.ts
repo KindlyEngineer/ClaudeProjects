@@ -41,11 +41,11 @@ export function buildHexOverlay(state: GameState, hexes: readonly Hex[], color: 
   return group;
 }
 
-/** The six facing choices at a move destination: an arrow on each hex face that
- *  the unit could finish fronting. Each arrow mesh carries `userData.facing` so a
- *  raycast resolves the click to a Direction; the natural travel direction is
- *  brighter as the suggested default. The player must pick one to commit a move. */
-export function buildFacingPicker(state: GameState, hex: Hex, natural: Direction): THREE.Group {
+/** The six facing choices at a move destination: an arrow on each hex face the
+ *  unit could finish fronting, with the currently aimed face (`active`) drawn
+ *  brighter and larger so the drag-to-face gesture reads at a glance. Each arrow
+ *  carries `userData.facing` (a raycast can still resolve a direct click to it). */
+export function buildFacingPicker(state: GameState, hex: Hex, active: Direction): THREE.Group {
   const group = new THREE.Group();
   const size = state.map.hexSize;
   const c = hexToWorld(hex, size);
@@ -54,13 +54,13 @@ export function buildFacingPicker(state: GameState, hex: Hex, natural: Direction
   for (let d = 0; d < 6; d++) {
     const nb = hexToWorld(neighbor(hex, d as Direction), size);
     const dir = new THREE.Vector3(nb.x - c.x, 0, nb.z - c.z).normalize();
-    const isNatural = d === natural;
+    const isActive = d === active;
     const arrow = new THREE.Mesh(
-      new THREE.ConeGeometry(size * 0.17, size * 0.5, 12),
-      new THREE.MeshBasicMaterial({ color: isNatural ? 0xfff2a8 : 0xffd24a, transparent: true, opacity: isNatural ? 1 : 0.8, depthTest: false }),
+      new THREE.ConeGeometry(size * (isActive ? 0.22 : 0.15), size * (isActive ? 0.62 : 0.42), 12),
+      new THREE.MeshBasicMaterial({ color: isActive ? 0xfff2a8 : 0xffd24a, transparent: true, opacity: isActive ? 1 : 0.55, depthTest: false }),
     );
     arrow.quaternion.setFromUnitVectors(up, dir); // lay the cone pointing outward
-    arrow.position.set(c.x + dir.x * size * 0.7, y, c.z + dir.z * size * 0.7);
+    arrow.position.set(c.x + dir.x * size * (isActive ? 0.78 : 0.7), y, c.z + dir.z * size * (isActive ? 0.78 : 0.7));
     arrow.renderOrder = 10; // draw over the board so it always reads/clicks
     arrow.userData.facing = d;
     group.add(arrow);

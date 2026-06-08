@@ -113,14 +113,19 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
   A hands-on click-to-act layer over the existing action API — the human stand-in
   for the runMatch "player" policy, so play and the harness share one seam. The
   player commands ONLY their own units (`controller === "player"`); the mechs and
-  the enemy stay AI (`commandForce`). Flow is BattleTech-style: select a unit
-  (board marker via raycast, or its bottom-centre info card), its reachable hexes
-  light up (blue), click one to stage a move, then pick the unit's **final
-  facing** from a six-arrow rosette at the destination to commit it (the facing
-  sets which armour arc incoming fire strikes — `moveUnit` takes an optional
-  `finalFacing`, defaulting to the travel direction for AI/scripted callers).
-  Then click a red enemy to fire / a green ally to resupply. "End Phase" hands the
-  phase to the AI for both sides then
+  the enemy stay AI (`commandForce`). Flow is BattleTech (2018)-style: select a
+  unit (board marker via raycast, or its bottom-centre info card), its reachable
+  hexes light up (blue), then **press-and-hold** a destination, **drag** the mouse
+  to aim which hex face the unit ends up fronting (a six-arrow rosette tracks the
+  cursor, snapping to the nearest face), and **release** to lock it in and execute
+  the move. The facing sets which armour arc incoming fire strikes — `moveUnit`
+  takes an optional `finalFacing`, defaulting to the travel direction for
+  AI/scripted callers. A plain click (no drag) on a red enemy fires / on a green
+  ally resupplies / on a unit selects it. Input is press/drag/release (mousedown
+  on the canvas, mousemove + mouseup on the window so a gesture that leaves the
+  canvas still commits); cursor→facing maps by intersecting the camera ray with a
+  ground plane at the destination and taking the nearest of the six faces. "End
+  Phase" hands the phase to the AI for both sides then
   advances — the same per-phase ordering as `runMatch` (player acts, then
   commandForce blue/red, then nextPhase). Cards show structure/fuel/ammo, supply
   + shaken status, and the mech's commander intent; not-ready units (spent, or
