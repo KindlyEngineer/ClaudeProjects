@@ -76,7 +76,9 @@ export function planForce(state: GameState, side: Side): ForcePlan {
     const axis = leastDefendedZoneHex(state, side);
     const advanceSign = side === "blue" ? 1 : -1; // advances toward the objective edge
     const bound = nearestPassable(state, { q: obj.q - advanceSign * 7, r: obj.r }, obj) ?? obj;
-    const assaulting = state.posture[side].kind === "assault";
+    // Breakthrough is about speed — drive for the exit at once (accept
+    // overextension); Seize develops methodically (suppress, then assault).
+    const assaulting = state.objective.kind === "breakthrough" || state.posture[side].kind === "assault";
     for (const u of livingUnits(state, side)) {
       if (u.controller !== "ai") continue;
       const cls = unitType(u.typeId).cls;

@@ -135,10 +135,12 @@ const zone: Hex[] = [
   offsetToAxial(24, 10),
 ];
 
+const cells = buildCells();
+
 export const MAP01: MapDef = {
   name: "Ridge Approach",
   hexSize: 1,
-  cells: buildCells(),
+  cells,
   units,
   objective: { kind: "seize", turnLimit: 18, zone, attacker: "blue" },
   // Skill is a tunable difficulty per side. The player's allied main effort is
@@ -146,5 +148,20 @@ export const MAP01: MapDef = {
   // misjudges and missteps, so the player has room and isn't forced into the one
   // "correct" line. (A scenario could make the ally fallible too, for a harder
   // "manage a sloppy ally" fight.)
+  commanderSkill: { blue: 1.0, red: 0.65 },
+};
+
+// Same ground, a different mission: BREAKTHROUGH — drive across to the far (east)
+// edge by the clock, rather than seize and hold the centre. The objective is the
+// whole exit edge, so the attacker flows to a gap and accepts overextension.
+const exitEdge: Hex[] = [];
+for (let row = 0; row < ROWS; row++) exitEdge.push(offsetToAxial(COLS - 1, row));
+
+export const MAP01_BREAKTHROUGH: MapDef = {
+  name: "Ridge Breakthrough",
+  hexSize: 1,
+  cells,
+  units,
+  objective: { kind: "breakthrough", turnLimit: 16, zone: exitEdge, attacker: "blue" },
   commanderSkill: { blue: 1.0, red: 0.65 },
 };

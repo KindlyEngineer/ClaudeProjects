@@ -282,6 +282,15 @@ export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): U
   // forward; precious fire support and supply stay protected.
   const committing = task && (task.kind === "advance" || task.kind === "counter" || task.kind === "probe");
   if (committing && weights.exposure !== undefined) weights.exposure *= 1 - role.expendable;
+  // Objective state & clock (the sixth commander input): the attacker drives
+  // harder as the deadline nears, and Breakthrough outruns its supply for speed.
+  if (side === state.objective.attacker) {
+    const urgency = clamp(state.turn / Math.max(1, state.objective.turnLimit), 0, 1);
+    if (weights.objective !== undefined) weights.objective *= 1 + urgency * 0.8;
+    if (weights.supply !== undefined) {
+      weights.supply *= (1 - urgency * 0.5) * (state.objective.kind === "breakthrough" ? 0.4 : 1);
+    }
+  }
   const entries = Object.entries(weights) as Array<[ConsiderationName, number]>;
   const score = (h: Hex): number => {
     let s = 0;

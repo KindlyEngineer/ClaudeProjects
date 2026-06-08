@@ -232,8 +232,22 @@ memory), never ground truth. Staged, gated:
   > → ~70% supported). Balanced ~50–65% self-play comes from a balanced *set* of
   > scenarios with appropriate force ratios (V1-D), not one fixed map. Proof holds
   > (no-support 0/20, with-support 14/20).
-- **V1-C — Breakthrough objective + the mirror**; **V1-D — content + self-play
-  balance**. Plus the deferred interactive UI and the LLM-policy seam (above).
+- **V1-C — Breakthrough objective + the mirror** ✅
+  A second objective that **bends commander behaviour**: BREAKTHROUGH (drive a
+  mech across the far exit edge by the clock) vs SEIZE (take & hold the centre).
+  The objective KIND modulates the attacker — Breakthrough **assaults at once and
+  outruns its supply** (speed, accepts overextension), Seize **develops
+  methodically** (suppress, then assault) — proven on the same map/seed. The
+  **sixth commander input (objective state & clock)** is wired: urgency rises as
+  the deadline nears (drive the objective harder, resupply less). The **mirror**
+  works — the AI attacks as red (`objective.attacker` is data; both sides run the
+  same attacker/defender machinery). Verified: Breakthrough win, Seize-vs-
+  Breakthrough expressiveness, mirror (red attacks), plus the two remaining
+  decision-input tests (friendly-support proximity, clock urgency) — **so all six
+  commander inputs now have a test** — 89 total. `MAP01_BREAKTHROUGH` ships for
+  the scenario; screenshot in `docs/shots/breakthrough.png`.
+- **V1-D — content + self-play balance** *(next)*. Plus the deferred interactive
+  UI and the LLM-policy seam (above).
 
 (Brief §5: full mirror + enabler, all six commander inputs each tested, Seize +
 Breakthrough, 2–3 maps, bulk self-play balance ~50–65%.)
