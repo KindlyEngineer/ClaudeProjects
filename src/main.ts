@@ -2,12 +2,13 @@ import * as THREE from "three";
 import { createView } from "./render/view";
 import { buildBoard } from "./render/board";
 import { createGame, livingUnits } from "./sim/state";
-import { updateSupply } from "./sim/logistics";
+import { beginTurn } from "./sim/turn";
+import { planForce } from "./sim/plan";
 import { decideUnit } from "./sim/ai";
 import { scriptedSkirmish } from "./sim/demo";
 import { noSupport, playerSupport, runMatch } from "./sim/match";
 import { unitType } from "./data/units";
-import { MAP01 } from "./data/maps/map01";
+import { MAP01, MAP01_BREAKTHROUGH } from "./data/maps/map01";
 
 // Slice 1 boot: build the game state from a map and render the 2.5D board.
 // Turn-based, so there is no fixed-timestep sim loop — we render on demand (and
@@ -21,7 +22,8 @@ const params = new URLSearchParams(location.search);
 const seed = Number(params.get("seed") ?? 1);
 
 const view = createView(container);
-const state = createGame(MAP01, seed);
+const map = params.get("map") === "breakthrough" ? MAP01_BREAKTHROUGH : MAP01;
+const state = createGame(map, seed);
 // ?demo=skirmish runs a deterministic scripted exchange (so the capture shows
 // movement + combat); otherwise just render the opening position.
 if (params.get("scenario") === "coreproof") {
@@ -32,10 +34,13 @@ if (params.get("scenario") === "coreproof") {
 } else if (params.get("demo") === "skirmish") {
   scriptedSkirmish(state, Number(params.get("turns") ?? 6));
 } else {
-  updateSupply(state);
-  // Surface each mech's opening commander intent on the static board too.
+  // Static opening board: run upkeep (supply/belief/postures) and the planner so
+  // each AI unit's opening intent reflects its actual task (defenders defend).
+  beginTurn(state);
+  const plans = { blue: planForce(state, "blue"), red: planForce(state, "red") };
   for (const m of livingUnits(state)) {
-    if (m.controller === "ai") state.intents[m.id] = decideUnit(state, m).intent;
+    if (m.controller !== "ai") continue;
+    state.intents[m.id] = decideUnit(state, m, plans[m.side].tasks.get(m.id)).intent;
   }
 }
 const board = buildBoard(state);

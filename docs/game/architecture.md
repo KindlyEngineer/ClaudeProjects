@@ -200,7 +200,57 @@ memory), never ground truth. Staged, gated:
     > harness role — termination/crash/invariant verification — is fully met. The
     > player-supported proof is unaffected (no-support 0/24, with-support 18/24).
 
-Then the rest of v1 (Breakthrough objective, more units/maps in data) per brief §5.
+## v1 (in progress)
+
+- **V1-A — AI fallibility / skill** ✅
+  Commanders aren't perfect (else the player has no slack to exploit). Imperfection
+  is **seeded and bounded**: the unit AI *satisfices* — it may take any move within
+  a `satisficeBand` of the best (a misstep, never a blunder), chosen by seeded AI
+  noise — and the assessment carries a seeded ± `assessError`. Both scale by
+  `1 - skill`, a **designer-set per-side difficulty** (`MapDef.commanderSkill`).
+  At skill 1 the band is 0 → exactly optimal (what every other test relies on).
+  Determinism is preserved (unit ids are now reset per game, since an id seeds
+  the noise). v0's map ships a **dependable ally (1.0) + fallible enemy (0.65)**:
+  the proof stays clean (no-support 0/20, with-support 18/20) while the *opponent*
+  the player faces misjudges and missteps — so there's never one "correct" line.
+  3 fallibility tests (determinism-when-fallible, bounded missteps, exact-at-1).
+- **V1-B — Risk/reward expendability + attacker phasing** ✅
+  *Force preservation with purposeful spending* (owner's caveat): each role has an
+  `expendable` rating — scouts/screens are spent readily, fire support and supply
+  are preserved — and that willingness only unlocks on a **committing** task
+  (advance/counter/probe), where exposure-aversion is discounted by `1 − expendable`.
+  So cheap units go forward to buy vision/screen the spearhead; precious ones stay
+  protected; nobody is thrown away idling. *Attacker phasing* — a posture machine
+  symmetric to the defender's: **develop → assault**. The maneuver force holds at a
+  support bound while recon scouts and fires suppress; it only ASSAULTS once it has
+  scouted the defence AND established fire superiority (defenders suppressed/
+  degraded) or perceives a clear advantage — never a bare charge. This lifted the
+  AI attacker from ~1% to ~7% in self-play.
+  > Self-play on MAP01 stays defender-favoured by design — equal forces vs a
+  > prepared defence favours the defender, which is the premise (the AI attacker
+  > can't crack it alone; the *player's* support is the decisive edge: ~0–7% alone
+  > → ~70% supported). Balanced ~50–65% self-play comes from a balanced *set* of
+  > scenarios with appropriate force ratios (V1-D), not one fixed map. Proof holds
+  > (no-support 0/20, with-support 14/20).
+- **V1-C — Breakthrough objective + the mirror** ✅
+  A second objective that **bends commander behaviour**: BREAKTHROUGH (drive a
+  mech across the far exit edge by the clock) vs SEIZE (take & hold the centre).
+  The objective KIND modulates the attacker — Breakthrough **assaults at once and
+  outruns its supply** (speed, accepts overextension), Seize **develops
+  methodically** (suppress, then assault) — proven on the same map/seed. The
+  **sixth commander input (objective state & clock)** is wired: urgency rises as
+  the deadline nears (drive the objective harder, resupply less). The **mirror**
+  works — the AI attacks as red (`objective.attacker` is data; both sides run the
+  same attacker/defender machinery). Verified: Breakthrough win, Seize-vs-
+  Breakthrough expressiveness, mirror (red attacks), plus the two remaining
+  decision-input tests (friendly-support proximity, clock urgency) — **so all six
+  commander inputs now have a test** — 89 total. `MAP01_BREAKTHROUGH` ships for
+  the scenario; screenshot in `docs/shots/breakthrough.png`.
+- **V1-D — content + self-play balance** *(next)*. Plus the deferred interactive
+  UI and the LLM-policy seam (above).
+
+(Brief §5: full mirror + enabler, all six commander inputs each tested, Seize +
+Breakthrough, 2–3 maps, bulk self-play balance ~50–65%.)
 
 ## Verification loop
 Per change: `typecheck → vitest → build → screenshot / headless run`. From the

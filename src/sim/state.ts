@@ -47,6 +47,7 @@ export interface GameState {
   intents: Record<number, string>; // mech id → the commander's current intent
   belief: { blue: Belief; red: Belief }; // fog-limited knowledge each side reasons on
   posture: { blue: PostureState; red: PostureState }; // operational posture per side
+  skill: { blue: number; red: number }; // commander skill (0,1]; <1 = fallible
 }
 
 /** Every random draw is logged for the headless harness (brief §3). */
@@ -79,7 +80,8 @@ export type Belief = Map<number, Sighting>;
  *  hysteresis). "probe" = gain information; "counter" = perceived advantage,
  *  go aggressive; "hold" = defend prepared positions. */
 export interface PostureState {
-  kind: "hold" | "probe" | "counter";
+  // Defender: hold → probe → counter. Attacker: develop → assault.
+  kind: "hold" | "probe" | "counter" | "develop" | "assault";
   since: number;
   targetId: number | null;
 }
@@ -88,6 +90,7 @@ let nextId = 1;
 
 /** Construct a fresh game from a map definition and a seed. */
 export function createGame(map: MapDef, seed: number): GameState {
+  nextId = 1; // deterministic unit ids per game (id is used as a seeded-AI salt)
   const cells = new Map<string, MapCell>();
   for (const cell of map.cells) cells.set(hexKey(cell.hex), cell);
 
@@ -131,6 +134,7 @@ export function createGame(map: MapDef, seed: number): GameState {
       blue: { kind: "hold", since: 1, targetId: null },
       red: { kind: "hold", since: 1, targetId: null },
     },
+    skill: { blue: map.commanderSkill?.blue ?? 1, red: map.commanderSkill?.red ?? 1 },
   };
 }
 

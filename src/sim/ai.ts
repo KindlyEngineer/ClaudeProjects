@@ -10,6 +10,7 @@ import { pathTo, reachable } from "./pathing";
 import { canMove, livingUnits, terrainAt, type GameState, type UnitInstance } from "./state";
 import { isEligible } from "./turn";
 import { isScouted } from "./vision";
+import { aiNoise } from "./ainoise";
 import { planForce, type Task } from "./plan";
 
 // The force AI: ONE capability-aware, fog-limited brain that commands whatever
@@ -191,6 +192,10 @@ interface RoleProfile {
   weights: Partial<Record<ConsiderationName, number>>;
   idealRange: number;
   action: "fire" | "resupply" | "none";
+  /** 0..1 — how readily the commander will SPEND this unit (accept its loss) for
+   *  a worthwhile outcome. Scouts/screens are expendable; fire support and supply
+   *  are precious. Only unlocked on committing tasks (advance / counter / probe). */
+  expendable: number;
 }
 
 const W = RULES.commander;
@@ -198,15 +203,15 @@ const ROLE: Record<UnitClass, RoleProfile> = {
   // The spearhead: pulled to the objective/seize, but it advances WITH its
   // escort (mutual) rather than soloing into the defence, and breaks contact
   // when its sustainment runs low (supply × need).
-  mech: { weights: { objective: W.wObjective, seize: W.wSeize, supply: W.wSupply, exposure: -W.wThreat, attack: W.wAttack }, idealRange: 0, action: "fire" },
-  recon: { weights: { objective: 1.2, exposure: -2.6, standoff: 1.6, cover: 0.6, supply: 0.5, mutual: 0.4 }, idealRange: 9, action: "fire" },
-  artillery: { weights: { objective: 0.2, exposure: -3.0, standoff: 2.2, cover: 0.5, supply: 0.6, mutual: 0.4 }, idealRange: 12, action: "fire" },
-  armor: { weights: { objective: 2, seize: 25, attack: 4, exposure: -1.0, cover: 0.8, standoff: 0.8, supply: 1.5, mutual: 0.6 }, idealRange: 9, action: "fire" },
-  infantry: { weights: { objective: 1.5, seize: 25, attack: 3, exposure: -1.6, cover: 1.6, supply: 0.8, mutual: 1.0 }, idealRange: 2, action: "fire" },
-  engineer: { weights: { objective: 1.5, attack: 2, exposure: -1.6, cover: 1.4, supply: 0.8, mutual: 1.0 }, idealRange: 2, action: "fire" },
+  mech: { weights: { objective: W.wObjective, seize: W.wSeize, supply: W.wSupply, exposure: -W.wThreat, attack: W.wAttack }, idealRange: 0, action: "fire", expendable: 0.4 },
+  recon: { weights: { objective: 1.2, exposure: -2.6, standoff: 1.6, cover: 0.6, supply: 0.5, mutual: 0.4 }, idealRange: 9, action: "fire", expendable: 0.8 },
+  artillery: { weights: { objective: 0.2, exposure: -3.0, standoff: 2.2, cover: 0.5, supply: 0.6, mutual: 0.4 }, idealRange: 12, action: "fire", expendable: 0.1 },
+  armor: { weights: { objective: 2, seize: 25, attack: 4, exposure: -1.0, cover: 0.8, standoff: 0.8, supply: 1.5, mutual: 0.6 }, idealRange: 9, action: "fire", expendable: 0.4 },
+  infantry: { weights: { objective: 1.5, seize: 25, attack: 3, exposure: -1.6, cover: 1.6, supply: 0.8, mutual: 1.0 }, idealRange: 2, action: "fire", expendable: 0.65 },
+  engineer: { weights: { objective: 1.5, attack: 2, exposure: -1.6, cover: 1.4, supply: 0.8, mutual: 1.0 }, idealRange: 2, action: "fire", expendable: 0.5 },
   // Supply must keep up with the spearhead to sustain it (cautious, but it can't
   // hang back so far the advance runs dry).
-  supply: { weights: { objective: 1.3, exposure: -1.2, nearNeedy: 3, supply: 1.0, mutual: 0.6 }, idealRange: 0, action: "resupply" },
+  supply: { weights: { objective: 1.3, exposure: -1.2, nearNeedy: 3, supply: 1.0, mutual: 0.6 }, idealRange: 0, action: "resupply", expendable: 0.1 },
 };
 
 function needsSupply(u: UnitInstance): boolean {
@@ -226,12 +231,10 @@ function taskWeights(base: Partial<Record<ConsiderationName, number>>, task?: Ta
     case "counter":
       add("objective", 3);
       add("attack", 4);
-      mul("exposure", 0.4);
       break;
     case "probe":
       add("objective", 1.5);
-      mul("exposure", 0.6);
-      mul("standoff", 0.3);
+      mul("standoff", 0.3); // push out to make contact
       break;
     case "hold":
       add("cover", 0.6);
@@ -273,7 +276,22 @@ export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): U
     idealRange: role.idealRange,
   };
 
-  const entries = Object.entries(taskWeights(role.weights, task)) as Array<[ConsiderationName, number]>;
+  const weights: Record<string, number> = { ...taskWeights(role.weights, task) };
+  // Risk-vs-reward: keep units alive by default, but on a COMMITTING task accept
+  // more risk to SPEND expendable units for the outcome — cheap scouts/screens go
+  // forward; precious fire support and supply stay protected.
+  const committing = task && (task.kind === "advance" || task.kind === "counter" || task.kind === "probe");
+  if (committing && weights.exposure !== undefined) weights.exposure *= 1 - role.expendable;
+  // Objective state & clock (the sixth commander input): the attacker drives
+  // harder as the deadline nears, and Breakthrough outruns its supply for speed.
+  if (side === state.objective.attacker) {
+    const urgency = clamp(state.turn / Math.max(1, state.objective.turnLimit), 0, 1);
+    if (weights.objective !== undefined) weights.objective *= 1 + urgency * 0.8;
+    if (weights.supply !== undefined) {
+      weights.supply *= (1 - urgency * 0.5) * (state.objective.kind === "breakthrough" ? 0.4 : 1);
+    }
+  }
+  const entries = Object.entries(weights) as Array<[ConsiderationName, number]>;
   const score = (h: Hex): number => {
     let s = 0;
     for (const [name, w] of entries) s += w * CONSIDERATIONS[name](ctx, h);
@@ -282,19 +300,27 @@ export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): U
 
   const mobile = canMove(unit);
   const reach = reachable(state, unit);
-  let bestKey = hexKey(unit.hex);
-  let bestHex = unit.hex;
-  let bestScore = mobile ? -Infinity : score(unit.hex);
-  if (mobile) {
-    for (const [k, node] of reach) {
-      const s = score(node.hex);
-      if (s > bestScore || (s === bestScore && k < bestKey)) {
-        bestScore = s;
-        bestKey = k;
-        bestHex = node.hex;
-      }
-    }
+  const cands: Array<{ key: string; hex: Hex; score: number }> = [];
+  if (mobile) for (const [k, node] of reach) cands.push({ key: k, hex: node.hex, score: score(node.hex) });
+  else cands.push({ key: hexKey(unit.hex), hex: unit.hex, score: score(unit.hex) });
+
+  let best = cands[0];
+  for (const c of cands) if (c.score > best.score || (c.score === best.score && c.key < best.key)) best = c;
+
+  // Fallibility: a less-than-perfect commander may take a good-but-not-best move
+  // — a misstep, never a blunder (always within the satisfice band of the best),
+  // and seeded so it's deterministic. At skill 1 the band is 0 → always optimal.
+  let chosen = best;
+  const band = (1 - state.skill[side]) * RULES.commander.satisficeBand;
+  if (band > 0) {
+    const eligible = cands
+      .filter((c) => c.score >= best.score - band)
+      .sort((a, b) => b.score - a.score || (a.key < b.key ? -1 : 1));
+    const n = aiNoise(state, side, unit.id);
+    chosen = eligible[Math.min((n * n * eligible.length) | 0, eligible.length - 1)]; // biased toward the top
   }
+  const bestKey = chosen.key;
+  const bestHex = chosen.hex;
 
   const path = mobile ? pathTo(reach, bestKey) : [];
   const fireTargetId = pickTarget(unit, bestHex, visible);

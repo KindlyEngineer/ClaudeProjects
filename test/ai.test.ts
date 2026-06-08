@@ -86,6 +86,45 @@ describe("mech commander — the player's levers (exposure)", () => {
   });
 });
 
+describe("mech commander — the player's levers (support & clock)", () => {
+  it("friendly support nearby lowers a hex's exposure (the screening lever)", () => {
+    const hex = axial(9, 4);
+    const make = (withScreen: boolean) =>
+      openGame({
+        w: 26,
+        h: 9,
+        objective,
+        units: [
+          place("mech_assault", "blue", axial(6, 4)),
+          place("armor", "red", axial(12, 4), 3),
+          ...(withScreen ? [place("armor", "blue", axial(9, 5))] : []), // a screen beside the hex
+        ],
+      });
+    const s1 = make(false);
+    const s2 = make(true);
+    const e1 = find(s1, "armor", "red");
+    const e2 = find(s2, "armor", "red");
+    expect(exposureAt(s2, "blue", hex, [e2])).toBeLessThan(exposureAt(s1, "blue", hex, [e1]));
+  });
+
+  it("the clock adds urgency — near the deadline it pushes the objective over resupplying", () => {
+    const s = openGame({
+      w: 26,
+      h: 9,
+      objective, // attacker = blue, zone east
+      units: [place("mech_assault", "blue", axial(12, 4)), place("supply", "blue", axial(1, 4))],
+    });
+    const mech = find(s, "mech_assault", "blue");
+    mech.ammo = mech.ammo.map(() => 0); // low on ammo → would break contact to resupply
+    const obj = s.objective.zone[0];
+    s.turn = 1; // early: plenty of time → fall back and resupply
+    const early = decideUnit(s, mech).destination;
+    s.turn = s.objective.turnLimit; // late: no time left → drive on regardless
+    const late = decideUnit(s, mech).destination;
+    expect(hexDistance(late, obj)).toBeLessThan(hexDistance(early, obj));
+  });
+});
+
 describe("mech commander — vision gating of targets", () => {
   it("won't engage an enemy in weapon range but out of sight until recon reveals it", () => {
     const base = () =>

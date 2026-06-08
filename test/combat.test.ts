@@ -52,6 +52,7 @@ function mkState(seed: number, units: UnitInstance[]): GameState {
     intents: {},
     belief: { blue: new Map(), red: new Map() },
     posture: { blue: { kind: "hold", since: 1, targetId: null }, red: { kind: "hold", since: 1, targetId: null } },
+    skill: { blue: 1, red: 1 },
   };
 }
 

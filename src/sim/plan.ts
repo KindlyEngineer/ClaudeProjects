@@ -1,8 +1,8 @@
-import { mulberry32Step } from "../core/rng";
 import { terrain } from "../data/terrain";
 import type { Side } from "../data/types";
 import { unitType } from "../data/units";
 import { hexDistance, hexKey, type Hex } from "./hex";
+import { aiNoise } from "./ainoise";
 import { believedEnemies } from "./knowledge";
 import { livingUnits, type GameState } from "./state";
 
@@ -23,18 +23,6 @@ export interface Task {
 
 export interface ForcePlan {
   tasks: Map<number, Task>;
-}
-
-/** Deterministic per-(seed, turn, side, salt) value in [0,1). Different seeds →
- *  different choices; same seed → identical. */
-export function aiNoise(state: GameState, side: Side, salt: number): number {
-  const h =
-    (Math.imul(state.seed | 1, 2654435761) ^
-      Math.imul(state.turn + 1, 40503) ^
-      (side === "blue" ? 0x9e3779b1 : 0x85ebca6b) ^
-      Math.imul(salt + 1, 668265263)) |
-    0;
-  return mulberry32Step(h).value;
 }
 
 function centroid(hexes: readonly Hex[]): Hex {
@@ -80,20 +68,26 @@ export function leastDefendedZoneHex(state: GameState, side: Side): Hex {
 export function planForce(state: GameState, side: Side): ForcePlan {
   const tasks = new Map<number, Task>();
   if (side === state.objective.attacker) {
-    // Attacker: maneuver elements push the perceived weak point (adaptive — the
-    // axis shifts as the defence moves); fire support, recon and supply keep
-    // their roles (shell from range, scout, sustain). Units still seize any hex.
+    // Attacker: DEVELOP the attack (recon scouts, fires suppress, the maneuver
+    // force holds at a support bound short of the objective) until fire
+    // superiority is established, then ASSAULT the perceived weak point. The
+    // axis is adaptive; units still seize any zone hex.
+    const obj = centroid(state.objective.zone);
     const axis = leastDefendedZoneHex(state, side);
+    const advanceSign = side === "blue" ? 1 : -1; // advances toward the objective edge
+    const bound = nearestPassable(state, { q: obj.q - advanceSign * 7, r: obj.r }, obj) ?? obj;
+    // Breakthrough is about speed — drive for the exit at once (accept
+    // overextension); Seize develops methodically (suppress, then assault).
+    const assaulting = state.objective.kind === "breakthrough" || state.posture[side].kind === "assault";
     for (const u of livingUnits(state, side)) {
       if (u.controller !== "ai") continue;
       const cls = unitType(u.typeId).cls;
-      if (cls === "mech" || cls === "armor" || cls === "infantry" || cls === "engineer") {
-        tasks.set(u.id, { goalHex: axis, kind: "advance" }); // commit to the axis
-      } else if (cls === "recon") {
-        tasks.set(u.id, { goalHex: axis, kind: "probe" }); // scout the weak point
+      if (cls === "recon") {
+        tasks.set(u.id, { goalHex: axis, kind: "probe" }); // scout the objective
+      } else if (cls === "mech" || cls === "armor" || cls === "infantry" || cls === "engineer") {
+        tasks.set(u.id, { goalHex: assaulting ? axis : bound, kind: "advance" }); // hold at the bound, then commit
       }
-      // artillery / supply: no task — their role behaviour (standoff fire,
-      // sustainment) is already right.
+      // artillery / supply keep their roles (shell from range, sustain).
     }
     return { tasks };
   }
