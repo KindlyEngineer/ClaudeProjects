@@ -3,7 +3,7 @@ import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
 import { resolveAttack, inRange, type AttackResult } from "./combat";
 import { transferSupply, type ResupplyResult } from "./logistics";
-import { directionTo, hexDistance, hexKey, type Hex } from "./hex";
+import { directionTo, hexDistance, hexKey, type Direction, type Hex } from "./hex";
 import { isEligible } from "./turn";
 import { isScouted } from "./vision";
 import { canFire, canMove, type GameState, type UnitInstance } from "./state";
@@ -31,8 +31,11 @@ export function movePoints(unit: UnitInstance): number {
 }
 
 /** Move along a contiguous path of adjacent hexes, paying terrain move-cost from
- *  the per-turn MP budget and from the fuel pool. Updates facing to the last step. */
-export function moveUnit(state: GameState, unit: UnitInstance, path: readonly Hex[]): MoveResult {
+ *  the per-turn MP budget and from the fuel pool. The unit ends facing the hex
+ *  face the caller specifies (`finalFacing`) — the player picks this after
+ *  choosing a destination, and it sets which armour arc incoming fire strikes; if
+ *  omitted (AI / scripted callers) it defaults to the direction of travel. */
+export function moveUnit(state: GameState, unit: UnitInstance, path: readonly Hex[], finalFacing?: Direction): MoveResult {
   if (unit.movedThisTurn) return { moved: false, cost: 0, reason: "already moved" };
   if (!isEligible(state, unit)) return { moved: false, cost: 0, reason: "not its phase" };
   if (!canMove(unit)) return { moved: false, cost: 0, reason: "immobilised" };
@@ -55,7 +58,7 @@ export function moveUnit(state: GameState, unit: UnitInstance, path: readonly He
 
   const last = path[path.length - 1];
   const from = path.length >= 2 ? path[path.length - 2] : unit.hex;
-  unit.facing = directionTo(from, last);
+  unit.facing = finalFacing ?? directionTo(from, last);
   unit.hex = last;
   unit.fuel -= cost;
   unit.movedThisTurn = true;

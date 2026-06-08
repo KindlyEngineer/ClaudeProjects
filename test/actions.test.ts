@@ -20,6 +20,19 @@ describe("move action", () => {
     expect(moveUnit(s, armor, [axial(4, 2)]).moved).toBe(false); // only one move per turn
   });
 
+  it("honours an explicit final facing (the player's post-move choice)", () => {
+    const s = openGame({ units: [place("armor", "blue", axial(1, 2))] });
+    beginTurn(s);
+    s.phase = "maneuver";
+    const armor = find(s, "armor");
+    // Travel is due east (would auto-face 0), but the player ends facing rear (3)
+    // to present the front toward a threat behind — the facing must be respected.
+    const r = moveUnit(s, armor, [axial(2, 2), axial(3, 2)], 3);
+    expect(r.moved).toBe(true);
+    expect(armor.hex).toEqual(axial(3, 2));
+    expect(armor.facing).toBe(3); // not the direction of travel
+  });
+
   it("rejects impassable, occupied, off-map, over-budget and wrong-phase moves", () => {
     const s = openGame({
       units: [place("armor", "blue", axial(1, 2)), place("infantry", "blue", axial(2, 2))],

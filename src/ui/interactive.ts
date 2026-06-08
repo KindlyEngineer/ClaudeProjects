@@ -1,12 +1,12 @@
 import * as THREE from "three";
 import type { View } from "../render/view";
 import { buildBoard } from "../render/board";
-import { buildHexOverlay } from "../render/overlay";
+import { buildFacingPicker, buildHexOverlay } from "../render/overlay";
 import type { Side } from "../data/types";
 import { moveUnit, attackUnit, resupplyUnit } from "../sim/actions";
 import { commandForce, decideUnit } from "../sim/ai";
 import { planForce } from "../sim/plan";
-import { hexKey, worldToHex, type Hex } from "../sim/hex";
+import { directionTo, hexKey, worldToHex, type Direction, type Hex } from "../sim/hex";
 import { evaluateOutcome } from "../sim/objective";
 import { pathTo, reachable, type ReachNode } from "../sim/pathing";
 import { livingUnits, unitAt, type GameState, type UnitInstance } from "../sim/state";
@@ -31,9 +31,18 @@ interface Options {
 
 const EMPTY_OPTIONS: Options = { reach: new Map(), moveKeys: new Set(), attack: new Map(), resupply: new Set() };
 
-export function startInteractive(view: View, state: GameState, opts: { selectId?: number; playerSide?: Side } = {}): void {
+// A move the player has positioned but not yet committed: the destination and
+// route are fixed; they must still choose the final facing before it executes.
+interface PendingMove {
+  dest: Hex;
+  path: Hex[];
+  natural: Direction; // the travel-direction facing, offered as the default
+}
+
+export function startInteractive(view: View, state: GameState, opts: { selectId?: number; playerSide?: Side; stage?: boolean } = {}): void {
   const playerSide: Side = opts.playerSide ?? "blue";
   let selectedId: number | null = opts.selectId ?? null;
+  let pendingMove: PendingMove | null = null;
   let framed = false;
 
   // Opening intents so the mech banners read on turn 1 (decideUnit is pure).
@@ -98,6 +107,13 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
 
   function buildSelectionOverlays(): THREE.Group {
     const g = new THREE.Group();
+    // While a move is staged, the board shows only the destination + the facing
+    // choices — the player commits the move by picking which way to front.
+    if (pendingMove) {
+      g.add(buildHexOverlay(state, [pendingMove.dest], 0xffe66a, 0.4));
+      g.add(buildFacingPicker(state, pendingMove.dest, pendingMove.natural));
+      return g;
+    }
     const o = currentOptions();
     const moveHexes: Hex[] = [];
     for (const key of o.moveKeys) moveHexes.push(o.reach.get(key)!.hex);
@@ -125,15 +141,35 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(pointer, view.camera);
 
+    const sel = selectedUnit();
+    const o = sel && readyToOrder(state, sel) ? currentOptions() : EMPTY_OPTIONS;
+
+    // A move is staged: the next click sets the final facing (commit), re-routes
+    // to another reachable hex, or — anything else — cancels back to the range.
+    if (pendingMove && sel) {
+      const facing = pickFacing();
+      if (facing !== null) {
+        moveUnit(state, sel, pendingMove.path, facing); // commit with chosen facing
+        pendingMove = null;
+        checkOutcome();
+        rebuild();
+        return;
+      }
+      const hex = pickHex();
+      if (hex && o.moveKeys.has(hexKey(hex)) && unitAt(state, hex) == null) {
+        pendingMove = stageMove(o, hex);
+        rebuild();
+        return;
+      }
+      pendingMove = null; // cancel — fall through to normal selection handling
+    }
+
     const clickedUnitId = pickUnit();
     const clickedHex = pickHex();
     // A click on a unit's ground hex (not its floating marker) still resolves to
     // that unit, so selecting by clicking the hex works too.
     const onHexUnit = clickedHex ? unitAt(state, clickedHex)?.id ?? null : null;
     const unitId = clickedUnitId ?? onHexUnit;
-
-    const sel = selectedUnit();
-    const o = sel && readyToOrder(state, sel) ? currentOptions() : EMPTY_OPTIONS;
 
     if (sel && unitId != null && o.attack.has(unitId)) {
       const target = livingUnits(state).find((u) => u.id === unitId)!;
@@ -142,7 +178,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
       const target = livingUnits(state).find((u) => u.id === unitId)!;
       resupplyUnit(state, sel, target);
     } else if (sel && clickedHex && o.moveKeys.has(hexKey(clickedHex)) && onHexUnit == null) {
-      moveUnit(state, sel, pathTo(o.reach, hexKey(clickedHex)));
+      pendingMove = stageMove(o, clickedHex); // choose a destination → now pick a facing
     } else if (unitId != null) {
       selectedId = unitId; // select (any unit can be inspected; only ready ones get orders)
     } else {
@@ -150,6 +186,23 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     }
     checkOutcome();
     rebuild();
+  }
+
+  /** Stage a move to `dest` (route + the default travel-direction facing). */
+  function stageMove(o: Options, dest: Hex): PendingMove {
+    const path = pathTo(o.reach, hexKey(dest));
+    const from = path.length >= 2 ? path[path.length - 2] : selectedUnit()!.hex;
+    return { dest, path, natural: directionTo(from, dest) };
+  }
+
+  /** The facing arrow under the pointer (a staged move's picker), or null. */
+  function pickFacing(): Direction | null {
+    if (!overlayGroup) return null;
+    for (const hit of raycaster.intersectObject(overlayGroup, true)) {
+      const f = hit.object.userData.facing;
+      if (f !== undefined) return f as Direction;
+    }
+    return null;
   }
 
   /** Nearest unit marker under the pointer, or null. */
@@ -189,6 +242,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     if (state.phase === "recon") previewIntents(state); // fresh turn → refresh banners
     checkOutcome();
     selectedId = null;
+    pendingMove = null;
     rebuild();
   }
 
@@ -219,6 +273,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
       (status ? `<div class="status">${status}</div>` : "");
     el.addEventListener("click", () => {
       selectedId = m.id;
+      pendingMove = null;
       rebuild();
     });
     return el;
@@ -241,9 +296,11 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     hint.className = "bar-hint";
     hint.textContent = decided
       ? ""
-      : sel && readyToOrder(state, sel)
-        ? "Click a blue hex to move · red enemy to fire · green ally to resupply"
-        : "Select one of your support units (board or card)";
+      : pendingMove
+        ? "Click an arrow to set the unit's final facing (or another blue hex to re-route)"
+        : sel && readyToOrder(state, sel)
+          ? "Click a blue hex to move · red enemy to fire · green ally to resupply"
+          : "Select one of your support units (board or card)";
     barEl.appendChild(hint);
 
     if (!decided) {
@@ -259,6 +316,19 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     if (!hudEl) return;
     const obj = state.objective;
     hudEl.innerHTML = `VANTAGE — ${state.map.name}&nbsp;&nbsp;·&nbsp;&nbsp;objective: ${obj.kind.toUpperCase()} (blue mechs)`;
+  }
+
+  // ?stage pre-positions a move (farthest reachable hex) so a screenshot can show
+  // the facing picker without a synthetic click.
+  if (opts.stage) {
+    const u = selectedUnit();
+    if (u && readyToOrder(state, u)) {
+      const o = currentOptions();
+      let far: string | null = null;
+      let best = -1;
+      for (const [k, node] of o.reach) if (node.prev !== null && node.cost > best) (best = node.cost), (far = k);
+      if (far) pendingMove = stageMove(o, o.reach.get(far)!.hex);
+    }
   }
 
   view.renderer.domElement.addEventListener("click", onClick);

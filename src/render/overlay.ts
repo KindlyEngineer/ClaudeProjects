@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { hexCorners, hexToWorld, type Hex } from "../sim/hex";
+import { hexCorners, hexToWorld, neighbor, type Direction, type Hex } from "../sim/hex";
 import { hexSurfaceY } from "./board";
 import type { GameState } from "../sim/state";
 
@@ -38,5 +38,32 @@ export function buildHexOverlay(state: GameState, hexes: readonly Hex[], color: 
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false }),
   );
   group.add(mesh);
+  return group;
+}
+
+/** The six facing choices at a move destination: an arrow on each hex face that
+ *  the unit could finish fronting. Each arrow mesh carries `userData.facing` so a
+ *  raycast resolves the click to a Direction; the natural travel direction is
+ *  brighter as the suggested default. The player must pick one to commit a move. */
+export function buildFacingPicker(state: GameState, hex: Hex, natural: Direction): THREE.Group {
+  const group = new THREE.Group();
+  const size = state.map.hexSize;
+  const c = hexToWorld(hex, size);
+  const y = hexSurfaceY(state, hex) + 0.5;
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let d = 0; d < 6; d++) {
+    const nb = hexToWorld(neighbor(hex, d as Direction), size);
+    const dir = new THREE.Vector3(nb.x - c.x, 0, nb.z - c.z).normalize();
+    const isNatural = d === natural;
+    const arrow = new THREE.Mesh(
+      new THREE.ConeGeometry(size * 0.17, size * 0.5, 12),
+      new THREE.MeshBasicMaterial({ color: isNatural ? 0xfff2a8 : 0xffd24a, transparent: true, opacity: isNatural ? 1 : 0.8, depthTest: false }),
+    );
+    arrow.quaternion.setFromUnitVectors(up, dir); // lay the cone pointing outward
+    arrow.position.set(c.x + dir.x * size * 0.7, y, c.z + dir.z * size * 0.7);
+    arrow.renderOrder = 10; // draw over the board so it always reads/clicks
+    arrow.userData.facing = d;
+    group.add(arrow);
+  }
   return group;
 }

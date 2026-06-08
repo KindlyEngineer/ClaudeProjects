@@ -72,10 +72,10 @@ if (headless) {
     hud.innerHTML = header + (intents ? `<br>${intents}` : "") + result;
   }
 } else {
-  // Interactive play. ?select=<id> pre-selects a unit so a screenshot can show
-  // the cards + movement range without a synthetic click.
+  // Interactive play. ?select=<id> pre-selects a unit (cards + movement range);
+  // adding ?stage stages a move so the facing picker shows — both for screenshots.
   const selectId = params.has("select") ? Number(params.get("select")) : undefined;
-  startInteractive(view, state, { selectId });
+  startInteractive(view, state, { selectId, stage: params.has("stage") });
 }
 
 window.addEventListener("resize", () => view.resize());
