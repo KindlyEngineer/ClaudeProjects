@@ -141,3 +141,13 @@ export function hexCorners(size: number): Array<{ x: number; z: number }> {
   }
   return out;
 }
+
+/** Inverse of {@link hexToWorld}: the hex whose centre is nearest world point
+ *  (x, z) on the XZ plane. Used by the interactive UI to turn a board click into
+ *  a hex. Solves the flat-top placement, then cube-rounds the fractional result. */
+export function worldToHex(x: number, z: number, size: number): Hex {
+  const qf = x / (size * 1.5);
+  const rf = z / (size * SQRT3) - qf / 2;
+  const h = cubeRound(qf, -qf - rf, rf);
+  return { q: h.q || 0, r: h.r || 0 }; // normalise -0 → 0 so equality is clean
+}

@@ -11,7 +11,8 @@
     "preview": "vite preview --port 4173 --strictPort",
     "test": "vitest run",
     "selfplay": "tsx tools/selfplay.ts",
-    "screenshot": "vite build && tsx tools/screenshot.ts"
+    "screenshot": "vite build && tsx tools/screenshot.ts",
+    "uitest": "vite build && tsx tools/uitest.ts"
   },
   "dependencies": {
     "three": "^0.184.0"

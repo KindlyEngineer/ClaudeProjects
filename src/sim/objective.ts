@@ -28,6 +28,9 @@ export function evaluateOutcome(state: GameState): "ongoing" | "blue" | "red" {
   // Attrition: the attacker is the player's side — losing all mechs or all
   // support ends the effort.
   if (mechs(state, attacker).length === 0 || support(state, attacker).length === 0) return defender;
+  // A wiped-out defence can't contest anything — the attacker wins at once
+  // (rather than walking to the zone against nobody until the clock decides).
+  if (livingUnits(state, defender).length === 0) return attacker;
   // The clock: take it by the turn limit, or the defender holds.
   if (state.turn > state.objective.turnLimit) return defender;
   return "ongoing";

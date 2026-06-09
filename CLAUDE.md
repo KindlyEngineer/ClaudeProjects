@@ -49,10 +49,15 @@ by an autonomous main effort.
   - `data/` — all content as data tables: `types.ts` (schemas), `terrain.ts`,
     `units.ts`, `maps/` (handcrafted maps). Add a row to add content.
   - `render/` — reads sim state only: `view.ts` (scene/camera), `board.ts`
-    (heightmap terrain + hex grid + facing-aware unit markers)
+    (heightmap terrain + hex grid + facing-aware unit markers + fog `viewSide`),
+    `overlay.ts` (range/target/facing-rosette/hit% overlays)
+  - `ui/` — interactive layer: `control.ts` (pure, tested selection/command rules
+    + fog-gated selection/inspection), `interactive.ts` (DOM/Three shell:
+    BattleTech-style press-drag-release move + facing, cards, inspect panel)
   - `main.ts` — boot
 - `test/` — Vitest unit tests (pure logic, no GPU)
-- `tools/screenshot.ts` — Playwright board-state capture
+- `tools/screenshot.ts` — Playwright board-state capture · `tools/uitest.ts` —
+  end-to-end mouse-gesture test (`npm run uitest`)
 - `docs/` — `brief.md` (source of truth), `game/` (design + architecture),
   `cloud-environment.md`
 
@@ -76,6 +81,7 @@ by an autonomous main effort.
 - Run locally: `npm run dev`
 - Screenshot-verify: `npm run screenshot` → `tools/shots/latest.png`, or
   `npx tsx tools/screenshot.ts "name=?seed=N"`
+- UI gesture-verify (real mouse drag in headless Chromium): `npm run uitest`
 
 ## Verification workflow
 Build in vertical slices; self-verify at each commit (typecheck → vitest →

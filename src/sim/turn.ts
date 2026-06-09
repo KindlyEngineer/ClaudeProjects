@@ -49,9 +49,13 @@ export function beginTurn(state: GameState): void {
   updateBelief(state, "blue"); // refresh each side's fog-limited picture
   updateBelief(state, "red");
   updatePostures(state); // re-assess the defender's posture from what it now knows
+  for (const u of state.units) {
+    if (u.structure <= 0) delete state.intents[u.id]; // no banners for the dead
+  }
   for (const u of livingUnits(state)) {
     u.movedThisTurn = false;
     u.actedThisTurn = false;
+    u.reserved = false; // a reserve commitment lasts one turn
     u.suppression = Math.max(0, u.suppression - RULES.suppressionDecayPerTurn);
     if (u.suppression < RULES.suppressionBreak) {
       const i = u.crits.indexOf("shaken");

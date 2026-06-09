@@ -77,6 +77,16 @@ export function updateSupply(state: GameState): void {
   }
 }
 
+/** Does `unit` have an ammo or fuel deficit worth a resupply? Any missing ammo
+ *  counts; `fuelFraction` sets how low fuel must run (1 = any deficit — the
+ *  UI's "is this a legal, useful action"; the AI passes 0.6 so it doesn't chase
+ *  one-point top-ups). The ONE definition shared by the UI, the AI and the
+ *  scripted policies, so they never disagree about who is needy. */
+export function needsSupply(unit: UnitInstance, fuelFraction = 1): boolean {
+  const t = unitType(unit.typeId);
+  return unit.fuel < t.fuelMax * fuelFraction || unit.ammo.some((a, i) => a < t.weapons[i].ammoMax);
+}
+
 export interface ResupplyResult {
   ok: boolean;
   ammoRestored: number;

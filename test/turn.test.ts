@@ -68,6 +68,23 @@ describe("phased initiative", () => {
     expect(u.crits).not.toContain("shaken"); // recovered below the break
   });
 
+  it("a reserve commitment lasts one turn (cleared by upkeep)", () => {
+    const s = game();
+    const recon = find(s, "recon");
+    recon.reserved = true;
+    beginTurn(s);
+    expect(recon.reserved).toBe(false); // back to its home phase next turn
+  });
+
+  it("upkeep clears intents of destroyed units (no banners for the dead)", () => {
+    const s = game();
+    const armor = find(s, "armor");
+    s.intents[armor.id] = "Advancing";
+    armor.structure = 0;
+    beginTurn(s);
+    expect(s.intents[armor.id]).toBeUndefined();
+  });
+
   it("PHASES is the canonical order", () => {
     expect([...PHASES]).toEqual(["recon", "fires", "maneuver"]);
   });

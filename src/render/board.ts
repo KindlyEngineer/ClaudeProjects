@@ -1,17 +1,48 @@
 import * as THREE from "three";
-import type { GameState, UnitInstance } from "../sim/state";
-import { hexCorners, hexKey, hexToWorld, neighbor } from "../sim/hex";
+import type { GameState } from "../sim/state";
+import { hexCorners, hexKey, hexToWorld, neighbor, type Direction, type Hex } from "../sim/hex";
 import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
-import type { UnitClass } from "../data/types";
+import type { Side, UnitClass } from "../data/types";
 
 // Builds the 2.5D board from game state: a continuous heightmap terrain surface
 // (per-hex elevation, smoothed at shared corners so seams are seamless), a hex
 // grid overlay, the objective zone, and programmer-art unit markers that show
 // side, class and facing. Pure read of state → a THREE.Group.
 
-const ELEV = 1.2; // world height per elevation unit
+export const ELEV = 1.2; // world height per elevation unit
 const LIFT = 0.03; // grid/zone offset above the surface to avoid z-fighting
+
+/** Surface height (world Y) at a hex centre — where unit markers and overlays
+ *  sit. Mirrors marker placement so selection/range overlays land on the ground. */
+export function hexSurfaceY(state: GameState, h: Hex): number {
+  return (state.cells.get(hexKey(h))?.elevation ?? 0) * ELEV;
+}
+
+/** Optional interactive decoration: which unit ids to dim (spent / not the
+ *  player's to order) and which one is selected (gets a highlight ring).
+ *  `viewSide` renders the board AS THAT SIDE SEES IT (fog of war): enemies only
+ *  where its belief puts them — in-sight units live, remembered ones as faded
+ *  "ghosts" at their last-known hex, unscouted ones not at all. Omit it (the
+ *  headless/verification modes) to render ground truth. */
+export interface BoardOpts {
+  dim?: Set<number>;
+  selectedId?: number | null;
+  viewSide?: Side;
+}
+
+/** What a marker needs to draw — satisfied by a live UnitInstance and by a
+ *  remembered Sighting (ghosts), so fog rendering reuses one marker builder. */
+interface MarkerData {
+  id: number;
+  typeId: string;
+  side: Side;
+  hex: Hex;
+  facing: Direction;
+  structure: number;
+  crits: string[];
+  inSupply: boolean;
+}
 const SIDE_COLOR: Record<string, number> = { blue: 0x4a90ff, red: 0xff5a4a };
 
 interface ClassStyle {
@@ -66,7 +97,7 @@ function smoothNormals(positions: number[]): number[] {
   return out;
 }
 
-export function buildBoard(state: GameState): Board {
+export function buildBoard(state: GameState, opts: BoardOpts = {}): Board {
   const group = new THREE.Group();
   const size = state.map.hexSize;
   const corners = hexCorners(size);
@@ -133,6 +164,7 @@ export function buildBoard(state: GameState): Board {
       side: THREE.DoubleSide,
     }),
   );
+  surface.name = "terrain"; // the interactive UI raycasts this to map a click → hex
   group.add(surface);
 
   // ── Hex grid overlay. ──
@@ -168,12 +200,35 @@ export function buildBoard(state: GameState): Board {
     group.add(new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0xffd24a })));
   }
 
-  // ── Unit markers. ──
+  // ── Unit markers (fog-filtered when a viewSide is set). ──
+  const belief = opts.viewSide ? state.belief[opts.viewSide] : undefined;
   for (const u of state.units) {
     if (u.structure <= 0) continue;
-    const cell = state.cells.get(hexKey(u.hex));
-    const intent = unitType(u.typeId).cls === "mech" ? state.intents[u.id] : undefined;
-    group.add(buildUnitMarker(u, size, (cell?.elevation ?? 0) * ELEV, intent));
+    if (belief && u.side !== opts.viewSide) {
+      const s = belief.get(u.id);
+      if (!s) continue; // never scouted — does not exist to this side
+      if (!s.visibleNow) {
+        // Remembered, not in sight: a faded ghost at its LAST-KNOWN state/hex.
+        group.add(
+          buildUnitMarker(
+            { id: s.id, typeId: s.typeId, side: s.side, hex: s.hex, facing: s.facing, structure: s.structure, crits: s.crits, inSupply: true },
+            size,
+            hexSurfaceY(state, s.hex),
+            undefined,
+            false,
+            opts.selectedId === s.id,
+            true,
+          ),
+        );
+        continue;
+      }
+    }
+    // Enemy commander intents stay hidden in a fogged view — legibility is for
+    // YOUR commander; the enemy's mind is not on display.
+    const showIntent = unitType(u.typeId).cls === "mech" && (!opts.viewSide || u.side === opts.viewSide);
+    const intent = showIntent ? state.intents[u.id] : undefined;
+    const dim = opts.dim?.has(u.id) ?? false;
+    group.add(buildUnitMarker(u, size, hexSurfaceY(state, u.hex), intent, dim, opts.selectedId === u.id, false));
   }
 
   min.y = 0;
@@ -181,19 +236,39 @@ export function buildBoard(state: GameState): Board {
   return { group, min, max };
 }
 
-function buildUnitMarker(u: UnitInstance, size: number, lift: number, intent?: string): THREE.Group {
+function buildUnitMarker(u: MarkerData, size: number, lift: number, intent: string | undefined, dim: boolean, selected: boolean, ghost: boolean): THREE.Group {
   const g = new THREE.Group();
+  g.userData.unitId = u.id; // raycast target → which unit was clicked
   const t = unitType(u.typeId);
   const style = CLASS_STYLE[t.cls];
   const c = hexToWorld(u.hex, size);
 
   const color = SIDE_COLOR[u.side];
+  const faded = dim || ghost;
   const body = new THREE.Mesh(
     style.geo(),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.5, emissive: new THREE.Color(color).multiplyScalar(0.15) }),
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.5,
+      emissive: new THREE.Color(color).multiplyScalar(selected ? 0.5 : 0.15),
+      transparent: faded,
+      opacity: ghost ? 0.3 : dim ? 0.4 : 1, // ghosts read as memories, spent units as greyed
+    }),
   );
   body.position.set(0, 0.45, 0);
+  body.userData.unitId = u.id;
   g.add(body);
+
+  if (selected) {
+    // A bright ring under the selected unit so the pick reads at a glance.
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(size * 0.62, size * 0.82, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffe66a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(0, 0.06, 0);
+    g.add(ring);
+  }
 
   // Facing prong — points toward the faced neighbour.
   const here = hexToWorld(u.hex, size);
@@ -207,8 +282,10 @@ function buildUnitMarker(u: UnitInstance, size: number, lift: number, intent?: s
   prong.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   g.add(prong);
 
-  g.add(makeBadge(u, style.abbr, color));
-  if (intent) g.add(makeIntentBanner(intent, color)); // legible commander intent
+  g.add(makeBadge(u, style.abbr, color, ghost));
+  // Legible commander intent. Adjacent mechs stagger banner height so two
+  // banners don't overprint each other.
+  if (intent) g.add(makeIntentBanner(intent, color, u.id % 2));
 
   // Lift the whole marker to its hex's surface height (reads as grounded) and
   // scale up so units stay legible on the larger board.
@@ -218,7 +295,7 @@ function buildUnitMarker(u: UnitInstance, size: number, lift: number, intent?: s
 }
 
 // A wide billboarded banner above a mech showing its commander's current intent.
-function makeIntentBanner(text: string, color: number): THREE.Sprite {
+function makeIntentBanner(text: string, color: number, stagger: number): THREE.Sprite {
   const W = 512;
   const H = 96;
   const canvas = document.createElement("canvas");
@@ -240,7 +317,7 @@ function makeIntentBanner(text: string, color: number): THREE.Sprite {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
-  sprite.position.set(0, 2.5, 0);
+  sprite.position.set(0, 2.5 + stagger * 0.9, 0);
   sprite.scale.set(2.6 * (W / H), 2.6, 1);
   return sprite;
 }
@@ -248,7 +325,9 @@ function makeIntentBanner(text: string, color: number): THREE.Sprite {
 // A billboarded badge: side-coloured ring, a health arc (green→red by remaining
 // structure), the class letter, and small status pips (orange = shaken crew,
 // red = cut off from supply) — so combat and logistics state read at a glance.
-function makeBadge(u: UnitInstance, abbr: string, color: number): THREE.Sprite {
+// Ghosts (remembered sightings) get a grey ring and no supply pip: the data is
+// last-known, not live.
+function makeBadge(u: MarkerData, abbr: string, color: number, ghost: boolean): THREE.Sprite {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 64;
   const ctx = canvas.getContext("2d")!;
@@ -259,7 +338,7 @@ function makeBadge(u: UnitInstance, abbr: string, color: number): THREE.Sprite {
   ctx.arc(32, 32, 28, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = hex(color); // side identity
+  ctx.strokeStyle = ghost ? "#8a8f9a" : hex(color); // grey ring = remembered, not live
   ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.arc(32, 32, 29, 0, Math.PI * 2);
@@ -278,7 +357,7 @@ function makeBadge(u: UnitInstance, abbr: string, color: number): THREE.Sprite {
   ctx.textBaseline = "middle";
   ctx.fillText(abbr, 32, 33);
 
-  if (!u.inSupply) {
+  if (!u.inSupply && !ghost) {
     ctx.fillStyle = "#ff4a4a"; // cut off from supply
     ctx.beginPath();
     ctx.arc(50, 16, 7, 0, Math.PI * 2);

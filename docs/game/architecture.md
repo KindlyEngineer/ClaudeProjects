@@ -109,8 +109,70 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
 > invariant is violated and every match terminates, the commander exposes a
 > human-readable intent each turn, and the harness runs headless + captures
 > board screenshots.
-- **Slice 6 — Interactive UI**
-  Minimal click-to-act layer feeding the same action API.
+- **Slice 6 — Interactive UI** ✅ (UI-1)
+  A hands-on click-to-act layer over the existing action API — the human stand-in
+  for the runMatch "player" policy, so play and the harness share one seam. The
+  player commands ONLY their own units (`controller === "player"`); the mechs and
+  the enemy stay AI (`commandForce`). Flow is BattleTech (2018)-style: select a
+  unit (board marker via raycast, or its bottom-centre info card), its reachable
+  hexes light up (blue), then **press-and-hold** a destination, **drag** the mouse
+  to aim which hex face the unit ends up fronting (a six-arrow rosette tracks the
+  cursor, snapping to the nearest face), and **release** to lock it in and execute
+  the move. The facing sets which armour arc incoming fire strikes — `moveUnit`
+  takes an optional `finalFacing`, defaulting to the travel direction for
+  AI/scripted callers. A plain click (no drag) on a red enemy fires / on a green
+  ally resupplies / on a unit selects it. Input is press/drag/release (mousedown
+  on the canvas, mousemove + mouseup on the window so a gesture that leaves the
+  canvas still commits); cursor→facing maps by intersecting the camera ray with a
+  ground plane at the destination and taking the nearest of the six faces. "End
+  Phase" hands the phase to the AI for both sides then
+  advances — the same per-phase ordering as `runMatch` (player acts, then
+  commandForce blue/red, then nextPhase). Cards show structure/fuel/ammo, supply
+  + shaken status, and the mech's commander intent; not-ready units (spent, or
+  off-phase) grey out on the board and in the cards.
+  - Rules-facing logic is pure + unit-tested (`ui/control.ts`: readiness,
+    move/attack/resupply options, card model); the DOM/Three shell
+    (`ui/interactive.ts`) is verified by screenshot. `render/overlay.ts` draws the
+    range/target highlights; `hex.worldToHex` turns a board click into a hex
+    (round-trip tested). Headless URL modes (coreproof / skirmish) still render a
+    static board for the capture harness.
+
+- **Slice 6.1 — UI hardening + player fog (UI-2)** ✅
+  - **Player fog of war.** The interactive board renders AS THE PLAYER'S SIDE
+    SEES IT (`buildBoard`'s `viewSide`): enemies in sight render live, remembered
+    sightings render as faded grey-ring "ghosts" at their LAST-KNOWN hex, and
+    unscouted enemies don't render at all. Selection (`selectableUnitIdAt`) and
+    inspection (`inspectModel`) flow through the side's belief — never ground
+    truth — so recon is load-bearing for the PLAYER, not just the AI. Enemy mech
+    intent banners are hidden in a fogged view. Headless modes (no `viewSide`)
+    still render ground truth for verification.
+  - **Turn-in-place**: press-and-hold the selected unit's own hex and drag —
+    rotation is the unit's move (`actions.faceUnit`; mobility crits forbid it).
+  - **Reserve**: a "Hold in reserve" button defers an unacted unit out of its
+    home phase to commit in maneuver (`reserved` is now cleared each upkeep).
+  - **Hit-chance preview** ("62%" labels over each targetable enemy) computed by
+    the same `hitChance` the roll uses; `attackOptions` now picks each target's
+    BEST weapon (penetration-aware), not the first that reaches.
+  - **Inspect panel** (bottom-right): selected own unit = full data + terrain;
+    selected enemy = believed state only, flagged `IN SIGHT` / `last seen T#`;
+    clicked empty ground = terrain (name/cover/move/LOS/elevation-visual).
+  - **Feedback + legibility**: failed orders surface their reason in the bar;
+    cards add a suppression meter and named crit labels; card-strip scroll is
+    preserved across rebuilds; adjacent mech banners stagger height.
+  - **Correctness/consistency**: the controller consumes the TESTED
+    `ui/control.ts` helpers (no duplicated reachability — the immobilised-unit
+    range bug is dead); one shared `logistics.needsSupply` (UI = any deficit,
+    AI/policies = 60% fuel bar) replaces three private copies; win/loss banner
+    and HUD are side-aware (defence reads "OBJECTIVE DEFENDED", not attacker
+    text); `evaluateOutcome` ends the match at once when the whole defence is
+    destroyed; map orientation convention (blue = min-q edge) documented on
+    `MapDef`; texture disposal on rebuild (CanvasTextures used to leak);
+    `#bar`/`#inspect` hide when empty in headless modes.
+  - **End-to-end gesture test** (`npm run uitest`, `tools/uitest.ts`): drives a
+    REAL mouse press-drag-release through the raycaster in headless Chromium and
+    asserts the unit's resulting hex + facing for both the move and the
+    turn-in-place — covering exactly the glue unit tests can't.
+  - Still deferred: undo, camera pan/zoom, per-weapon manual override.
 
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 

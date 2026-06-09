@@ -1,5 +1,5 @@
 import { createGame, type GameState, type UnitInstance } from "../src/sim/state";
-import type { MapDef, ObjectiveDef, Side, UnitPlacement } from "../src/data/types";
+import type { Controller, MapDef, ObjectiveDef, Side, UnitPlacement } from "../src/data/types";
 import type { Direction, Hex } from "../src/sim/hex";
 
 // Shared test scaffolding (not a suite itself). Builds a small flat open map so
@@ -37,8 +37,8 @@ export function openGame(opts: OpenGameOpts): GameState {
   return createGame(map, opts.seed ?? 1);
 }
 
-export function place(type: string, side: Side, hex: Hex, facing: Direction = 0): UnitPlacement {
-  return { type, side, hex, facing };
+export function place(type: string, side: Side, hex: Hex, facing: Direction = 0, controller?: Controller): UnitPlacement {
+  return { type, side, hex, facing, controller };
 }
 
 /** First living unit of a type (optionally a side). */

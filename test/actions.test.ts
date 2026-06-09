@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { attackUnit, canAttack, moveUnit, resupplyUnit } from "../src/sim/actions";
+import { attackUnit, canAttack, faceUnit, moveUnit, resupplyUnit } from "../src/sim/actions";
 import { beginTurn } from "../src/sim/turn";
 import { axial, find, openGame, place } from "./helpers";
 
@@ -18,6 +18,46 @@ describe("move action", () => {
     expect(armor.hex).toEqual(axial(3, 2));
     expect(armor.movedThisTurn).toBe(true);
     expect(moveUnit(s, armor, [axial(4, 2)]).moved).toBe(false); // only one move per turn
+  });
+
+  it("honours an explicit final facing (the player's post-move choice)", () => {
+    const s = openGame({ units: [place("armor", "blue", axial(1, 2))] });
+    beginTurn(s);
+    s.phase = "maneuver";
+    const armor = find(s, "armor");
+    // Travel is due east (would auto-face 0), but the player ends facing rear (3)
+    // to present the front toward a threat behind — the facing must be respected.
+    const r = moveUnit(s, armor, [axial(2, 2), axial(3, 2)], 3);
+    expect(r.moved).toBe(true);
+    expect(armor.hex).toEqual(axial(3, 2));
+    expect(armor.facing).toBe(3); // not the direction of travel
+  });
+
+  it("turn-in-place sets facing without moving and spends the move activation", () => {
+    const s = openGame({ units: [place("armor", "blue", axial(3, 2), 0)] });
+    beginTurn(s);
+    s.phase = "maneuver";
+    const armor = find(s, "armor");
+    const r = faceUnit(s, armor, 3); // about-face toward a threat behind
+    expect(r.moved).toBe(true);
+    expect(r.cost).toBe(0); // no ground covered, no fuel spent
+    expect(armor.hex).toEqual(axial(3, 2));
+    expect(armor.facing).toBe(3);
+    expect(armor.movedThisTurn).toBe(true); // turning IS the unit's move
+    expect(faceUnit(s, armor, 1).reason).toBe("already moved");
+    expect(moveUnit(s, armor, [axial(4, 2)]).reason).toBe("already moved");
+  });
+
+  it("turn-in-place respects phase and mobility crits", () => {
+    const s = openGame({ units: [place("armor", "blue", axial(3, 2), 0)] });
+    beginTurn(s);
+    const armor = find(s, "armor");
+    s.phase = "recon";
+    expect(faceUnit(s, armor, 2).reason).toBe("not its phase");
+    s.phase = "maneuver";
+    armor.crits.push("mobility");
+    expect(faceUnit(s, armor, 2).reason).toBe("immobilised"); // dead legs can't pivot
+    expect(armor.facing).toBe(0);
   });
 
   it("rejects impassable, occupied, off-map, over-budget and wrong-phase moves", () => {
