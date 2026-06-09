@@ -2,6 +2,7 @@ import { RULES } from "../data/rules";
 import type { UnitClass } from "../data/types";
 import { unitType } from "../data/units";
 import { updatePostures } from "./assess";
+import { expireEffects } from "./effects";
 import { emit } from "./events";
 import { updateBelief } from "./knowledge";
 import { updateSupply } from "./logistics";
@@ -47,6 +48,7 @@ export function isEligible(state: GameState, u: UnitInstance): boolean {
 export function beginTurn(state: GameState): void {
   state.phase = "recon";
   emit(state, { kind: "turn", n: state.turn });
+  expireEffects(state); // smoke dissipates before anyone looks or moves
   updateSupply(state);
   updateBelief(state, "blue"); // refresh each side's fog-limited picture
   updateBelief(state, "red");

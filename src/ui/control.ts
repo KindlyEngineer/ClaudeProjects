@@ -1,9 +1,9 @@
 import type { Side } from "../data/types";
 import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
-import { canAttack } from "../sim/actions";
+import { canAttack, canFortify, missionWeaponIndex } from "../sim/actions";
 import { hitChance } from "../sim/combat";
-import { armorArc, hexDistance, hexEquals, type Hex } from "../sim/hex";
+import { armorArc, hexDistance, hexEquals, neighbors, type Hex } from "../sim/hex";
 import { needsSupply } from "../sim/logistics";
 import { reachable, type ReachNode } from "../sim/pathing";
 import { RULES } from "../data/rules";
@@ -114,6 +114,23 @@ export function attackPreviews(state: GameState, unit: UnitInstance): AttackPrev
     out.push({ id, weaponIndex, hex: target.hex, hitPct: Math.round(hitChance(state, unit, w, target) * 100) });
   }
   return out;
+}
+
+/** Which SUPPORT VERBS this unit could use right now (drives the bar buttons —
+ *  target validity is the action's own gate, checked on the click). */
+export function supportActions(state: GameState, unit: UnitInstance): { missions: boolean; fortify: boolean } {
+  if (!readyToOrder(state, unit) || unit.actedThisTurn) return { missions: false, fortify: false };
+  const wi = missionWeaponIndex(unit);
+  const missions =
+    wi !== null && canFire(unit) && unit.dryTurns < RULES.dryFireTurns && unit.ammo[wi] >= RULES.mission.ammoCost;
+  const fortify = unitType(unit.typeId).cls === "engineer";
+  return { missions, fortify };
+}
+
+/** Hexes this engineer could fortify right now (its own + adjacent). */
+export function fortifyTargets(state: GameState, unit: UnitInstance): Hex[] {
+  if (!readyToOrder(state, unit)) return [];
+  return [unit.hex, ...neighbors(unit.hex)].filter((h) => canFortify(state, unit, h).ok);
 }
 
 /** Adjacent friendly units this supply unit could resupply right now. */

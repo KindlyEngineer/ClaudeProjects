@@ -1,6 +1,7 @@
 import type { Controller, MapCell, MapDef, ObjectiveDef, Side } from "../data/types";
 import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
+import type { BattlefieldEffect } from "./effects";
 import type { GameEvent } from "./events";
 import { hexKey, type Direction, type Hex } from "./hex";
 
@@ -46,6 +47,7 @@ export interface GameState {
   rngState: number; // advanced by the dice roller (slice 2)
   rollLog: RollRecord[];
   events: GameEvent[]; // append-only what-happened stream (animation + combat log)
+  effects: BattlefieldEffect[]; // smoke / fortifications standing on the ground
   intents: Record<number, string>; // mech id → the commander's current intent
   belief: { blue: Belief; red: Belief }; // fog-limited knowledge each side reasons on
   posture: { blue: PostureState; red: PostureState }; // operational posture per side
@@ -131,6 +133,7 @@ export function createGame(map: MapDef, seed: number): GameState {
     rngState: seed >>> 0,
     rollLog: [],
     events: [],
+    effects: [],
     intents: {},
     belief: { blue: new Map(), red: new Map() },
     posture: {

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { createView } from "./render/view";
 import { tickAnimations } from "./render/anim";
 import { buildBoard } from "./render/board";
+import { addEffect } from "./sim/effects";
 import { hexToWorld } from "./sim/hex";
 import { createGame, livingUnits } from "./sim/state";
 import { beginTurn } from "./sim/turn";
@@ -76,6 +77,13 @@ if (headless) {
 } else {
   // Interactive play. ?select=<id> pre-selects a unit (cards + movement range);
   // adding ?stage stages a move so the facing picker shows — both for screenshots.
+  // ?fxdemo drops sample battlefield effects so the markers can be verified.
+  if (params.has("fxdemo")) {
+    const c = state.map.cells[Math.floor(state.map.cells.length / 2)].hex;
+    addEffect(state, "smoke", c);
+    addEffect(state, "smoke", { q: c.q, r: c.r + 1 });
+    addEffect(state, "fortification", { q: c.q - 2, r: c.r });
+  }
   const selectId = params.has("select") ? Number(params.get("select")) : undefined;
   startInteractive(view, state, { selectId, stage: params.has("stage") });
 }

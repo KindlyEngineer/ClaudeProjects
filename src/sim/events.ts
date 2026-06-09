@@ -31,7 +31,19 @@ export type GameEvent =
       suppression: number;
       destroyed: boolean;
     }
-  | { seq: number; turn: number; kind: "resupply"; id: number; side: Side; targetId: number; ammo: number; fuel: number };
+  | { seq: number; turn: number; kind: "resupply"; id: number; side: Side; targetId: number; ammo: number; fuel: number }
+  | {
+      seq: number;
+      turn: number;
+      kind: "mission"; // indirect-fire area mission (suppression or smoke)
+      id: number;
+      side: Side;
+      mission: "suppress" | "smoke";
+      at: Hex;
+      hexes: Hex[]; // the saturated area
+      suppressedIds: number[]; // units rattled by a suppression mission
+    }
+  | { seq: number; turn: number; kind: "build"; id: number; side: Side; at: Hex; effect: string };
 
 // Omit must DISTRIBUTE over the union (plain Omit collapses it to common keys).
 type EventInput = GameEvent extends infer E ? (E extends GameEvent ? Omit<E, "seq" | "turn"> : never) : never;

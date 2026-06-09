@@ -5,7 +5,7 @@ import type { GameEvent } from "../sim/events";
 import { hexCorners, hexKey, hexToWorld, type Hex } from "../sim/hex";
 import type { GameState } from "../sim/state";
 import { delay, easeOut, tween } from "./anim";
-import { buildTerrain, hexSurfaceY, markerDataFor, type Board, type BoardOpts } from "./board";
+import { buildEffectsGroup, buildTerrain, hexSurfaceY, markerDataFor, type Board, type BoardOpts } from "./board";
 import { buildUnitMarker, buildWreck, facingAngle, type Marker } from "./models";
 
 // The animated interactive scene. Unlike the static board (rebuilt wholesale for
@@ -32,6 +32,8 @@ export class Stage {
   private wrecks = new Map<number, THREE.Group>();
   private wreckLayer = new THREE.Group();
   private fx = new THREE.Group(); // transient effects (tracers, flashes, text)
+  private effectsLayer = new THREE.Group(); // standing battlefield effects
+  private effectsSig = "";
   private hoverRing: THREE.LineLoop;
   private lastOpts: BoardOpts = {};
 
@@ -40,6 +42,7 @@ export class Stage {
     this.terrain = buildTerrain(state);
     this.group.add(this.terrain.group);
     this.group.add(this.wreckLayer);
+    this.group.add(this.effectsLayer);
     this.group.add(this.fx);
 
     const pts: THREE.Vector3[] = hexCorners(this.size * 0.96).map((c) => new THREE.Vector3(c.x, 0, c.z));
@@ -121,6 +124,18 @@ export class Stage {
         this.visuals.delete(id);
       }
     }
+
+    // Standing battlefield effects (smoke / fortifications), fog-aware.
+    const effSig =
+      this.state.effects.map((e) => `${e.kind}:${hexKey(e.hex)}:${e.expiresTurn}`).join("|") + `@${opts.viewSide ?? "all"}T${this.state.turn}`;
+    if (effSig !== this.effectsSig) {
+      this.effectsSig = effSig;
+      this.effectsLayer.children.slice().forEach((c) => {
+        this.effectsLayer.remove(c);
+        disposeGroup(c);
+      });
+      this.effectsLayer.add(buildEffectsGroup(this.state, opts.viewSide));
+    }
   }
 
   setHover(hex: Hex | null): void {
@@ -144,9 +159,41 @@ export class Stage {
         return this.playFire(ev);
       case "resupply":
         return this.playResupply(ev);
+      case "mission":
+        return this.playMission(ev);
+      case "build":
+        return this.playBuild(ev);
       default:
         return; // turn/phase markers are log-only
     }
+  }
+
+  /** An area mission: a rolling barrage of flashes across the footprint, then
+   *  the outcome text (suppression markers / the smoke standing up via sync). */
+  private async playMission(ev: Extract<GameEvent, { kind: "mission" }>): Promise<void> {
+    const color = ev.mission === "suppress" ? 0xffa24a : 0xb8c2cc;
+    for (let i = 0; i < ev.hexes.length; i++) {
+      const h = ev.hexes[i];
+      const c = hexToWorld(h, this.size);
+      this.flash(new THREE.Vector3(c.x, this.groundY(h) + 0.5, c.z), color, 0.3, 220);
+      if (i % 2 === 1) await delay(70); // the barrage walks across the area
+    }
+    await delay(160);
+    if (ev.mission === "suppress") {
+      for (const id of ev.suppressedIds) {
+        const u = this.state.units.find((x) => x.id === id);
+        if (u && (this.shownLive(id) || u.side === this.lastOpts.viewSide)) this.floatText(u.hex, "SUPPRESSED", "#ffb27a");
+      }
+    } else {
+      this.floatText(ev.at, "SMOKE SCREEN", "#cfd8ee");
+    }
+    await delay(220);
+  }
+
+  private async playBuild(ev: Extract<GameEvent, { kind: "build" }>): Promise<void> {
+    if (!this.shownLive(ev.id) && this.state.units.find((u) => u.id === ev.id)?.side !== this.lastOpts.viewSide) return;
+    this.floatText(ev.at, "FORTIFIED", "#d8c47a");
+    await delay(260);
   }
 
   private visualOf(id: number): Visual | undefined {

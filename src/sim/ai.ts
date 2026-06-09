@@ -2,12 +2,13 @@ import { clamp } from "../core/math";
 import { RULES } from "../data/rules";
 import type { Side, UnitClass } from "../data/types";
 import { unitType } from "../data/units";
-import { attackUnit, canAttack, moveUnit, resupplyUnit } from "./actions";
+import { attackUnit, canAttack, canFireMission, canFortify, fireMission, fortifyHex, moveUnit, resupplyUnit } from "./actions";
+import { coverAt } from "./effects";
 import { armorArc, hexDistance, hexKey, type Hex } from "./hex";
 import { believedEnemies, visibleSightings } from "./knowledge";
 import { needsSupply as supplyDeficit, supplySources } from "./logistics";
 import { pathTo, reachable } from "./pathing";
-import { canMove, livingUnits, terrainAt, type GameState, type UnitInstance } from "./state";
+import { canMove, livingUnits, type GameState, type UnitInstance } from "./state";
 import { isEligible } from "./turn";
 import { isScouted } from "./vision";
 import { aiNoise } from "./ainoise";
@@ -94,7 +95,7 @@ export function exposureAt(state: GameState, side: Side, hex: Hex, enemies: read
       threat += w.damage * w.accuracy * suppFactor * closeness;
     }
   }
-  const cover = terrainAt(state, hex)?.cover ?? 0;
+  const cover = coverAt(state, hex); // terrain + battlefield effects (fortifications shelter)
   threat *= clamp(1 - cover * c.coverExposureReduction, 0.2, 1);
   threat *= clamp(1 - supportNear(state, side, hex, -1) * c.supportReduction, 0.3, 1);
   if (!isScouted(state, side, hex)) threat += c.fogCaution;
@@ -178,7 +179,7 @@ const CONSIDERATIONS: Record<ConsiderationName, (ctx: AiContext, h: Hex) => numb
   supply: (ctx, h) => ctx.need.need * (ctx.dSupFrom - nearestDist(h, ctx.supplyPts)),
   exposure: (ctx, h) => exposureAt(ctx.state, ctx.side, h, ctx.believed),
   attack: (ctx, h) => bestShotValue(ctx.unit, h, ctx.visible),
-  cover: (ctx, h) => terrainAt(ctx.state, h)?.cover ?? 0,
+  cover: (ctx, h) => coverAt(ctx.state, h), // terrain + effects (a fortified hex is good ground)
   standoff: (ctx, h) => (ctx.believedHexes.length ? -Math.abs(nearestDist(h, ctx.believedHexes) - ctx.idealRange) : 0),
   // Isolation penalty: 0 while a friendly is within support range, growing
   // negative beyond it — discourages racing ahead of the force without stalling
@@ -444,6 +445,36 @@ function doFire(state: GameState, unit: UnitInstance, priority: UnitInstance | n
   if (bestTarget && bestV > 0) attackUnit(state, unit, bestWeapon, bestTarget);
 }
 
+/** Artillery doctrine: when 2+ visible enemies sit inside one mission footprint,
+ *  an area SUPPRESSION beats plinking a single target — saturation pressure is
+ *  what cracks a position. Deterministic (sorted candidates, first-best wins). */
+function tryFireMission(state: GameState, unit: UnitInstance): boolean {
+  const visible = visibleSightings(state, unit.side);
+  if (visible.length < 2) return false;
+  const cands = [...visible].sort((a, b) => (hexKey(a.hex) < hexKey(b.hex) ? -1 : 1));
+  let best: Hex | null = null;
+  let bestN = 1;
+  for (const s of cands) {
+    const n = visible.filter((o) => hexDistance(o.hex, s.hex) <= RULES.mission.radius).length;
+    if (n > bestN) {
+      bestN = n;
+      best = s.hex;
+    }
+  }
+  if (!best || !canFireMission(state, unit, best, "suppress").ok) return false;
+  return fireMission(state, unit, best, "suppress").ok;
+}
+
+/** Engineer doctrine: a DEFENDING engineer on a hold digs in — fortifying its
+ *  position (cover for the line, slow going for the assault) is worth more than
+ *  its demo charges. Attacking engineers keep moving and fighting. */
+function tryFortify(state: GameState, unit: UnitInstance, task?: Task): boolean {
+  if (unit.side === state.objective.attacker) return false;
+  if (task && task.kind !== "hold" && task.kind !== "screen" && task.kind !== "rear") return false;
+  if (!canFortify(state, unit, unit.hex).ok) return false;
+  return fortifyHex(state, unit, unit.hex).ok;
+}
+
 function doResupply(state: GameState, unit: UnitInstance): void {
   // Resupply the neediest adjacent friendly (favour the spearhead — the mech).
   const adj = livingUnits(state, unit.side)
@@ -458,12 +489,18 @@ export function commandForce(state: GameState, side: Side): void {
   const plan = planForce(state, side);
   for (const unit of livingUnits(state, side)) {
     if (unit.controller !== "ai" || !isEligible(state, unit)) continue;
-    const decision = decideUnit(state, unit, plan.tasks.get(unit.id));
+    const task = plan.tasks.get(unit.id);
+    const decision = decideUnit(state, unit, task);
     state.intents[unit.id] = decision.intent;
     if (decision.path.length) moveUnit(state, unit, decision.path);
-    const action = ROLE[unitType(unit.typeId).cls].action;
+    const cls = unitType(unit.typeId).cls;
+    const action = ROLE[cls].action;
     // Recompute the priority after the move so concentration tracks the field.
-    if (action === "fire") doFire(state, unit, forcePriority(state, side));
-    else if (action === "resupply") doResupply(state, unit);
+    if (action === "fire") {
+      // Support verbs first where doctrine says so, else aimed fire.
+      if (cls === "artillery" && tryFireMission(state, unit)) continue;
+      if (cls === "engineer" && tryFortify(state, unit, task)) continue;
+      doFire(state, unit, forcePriority(state, side));
+    } else if (action === "resupply") doResupply(state, unit);
   }
 }

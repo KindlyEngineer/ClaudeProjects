@@ -6,9 +6,10 @@ import { buildFacingPicker, buildHexLabels, buildHexOverlay } from "../render/ov
 import { Stage, disposeGroup } from "../render/stage";
 import type { Side } from "../data/types";
 import { unitType } from "../data/units";
-import { moveUnit, attackUnit, faceUnit, resupplyUnit } from "../sim/actions";
+import { moveUnit, attackUnit, faceUnit, resupplyUnit, fireMission, fortifyHex, canFireMission, missionArea, type MissionKind } from "../sim/actions";
 import { commandForce, decideUnit } from "../sim/ai";
 import type { GameEvent } from "../sim/events";
+import { commanderNeeds } from "../sim/needs";
 import { planForce } from "../sim/plan";
 import { directionTo, hexEquals, hexKey, hexToWorld, neighbor, worldToHex, type Direction, type Hex } from "../sim/hex";
 import { evaluateOutcome } from "../sim/objective";
@@ -20,11 +21,13 @@ import {
   attackPreviews,
   canReserve,
   forceCards,
+  fortifyTargets,
   inspectModel,
   moveOptions,
   readyToOrder,
   resupplyOptions,
   selectableUnitIdAt,
+  supportActions,
   type CardModel,
   type InspectModel,
   type TerrainInfo,
@@ -69,6 +72,8 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
   let inspectHex: Hex | null = null; // clicked empty ground → terrain inspection
   let notice: string | null = null; // why the last order didn't happen
   let playing = false; // event playback in progress → input parked
+  let targeting: MissionKind | "fortify" | null = null; // a support verb awaiting a target
+  let hoverHex: Hex | null = null; // for the mission-area preview
 
   // Opening intents so the mech banners read on turn 1 (decideUnit is pure).
   beginTurn(state);
@@ -79,6 +84,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
   const inspectEl = ensure("inspect");
   const logEl = ensure("log");
   const endEl = ensure("end");
+  const needsEl = ensure("needs");
   const hudEl = document.getElementById("hud");
 
   const raycaster = new THREE.Raycaster();
@@ -118,6 +124,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     renderInspect();
     renderHud();
     renderLog();
+    renderNeeds();
     renderEnd();
   }
 
@@ -162,6 +169,19 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
       g.add(buildFacingPicker(state, pendingMove.dest, pendingMove.facing));
       return g;
     }
+    // A support verb is targeting: preview the footprint under the cursor
+    // (missions) or light the buildable hexes (fortify).
+    if (targeting) {
+      const sel = selectedUnit();
+      if (sel && targeting === "fortify") {
+        g.add(buildHexOverlay(state, fortifyTargets(state, sel), 0xd8c47a, 0.4));
+      } else if (sel && hoverHex) {
+        const ok = canFireMission(state, sel, hoverHex, targeting as MissionKind).ok;
+        const color = !ok ? 0x666c78 : targeting === "suppress" ? 0xff8a3a : 0xb8c2cc;
+        g.add(buildHexOverlay(state, missionArea(state, hoverHex), color, ok ? 0.4 : 0.18));
+      }
+      return g;
+    }
     const sel = selectedUnit();
     const o = currentOptions();
     const moveHexes: Hex[] = [];
@@ -204,6 +224,24 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
 
     const pressedUnitId = pickUnit();
     const clickedHex = pickHex();
+
+    // A support verb is targeting: this click designates (or rejects) the target.
+    if (targeting && sel) {
+      if (!clickedHex) {
+        targeting = null; // clicked off-board → cancel
+        refreshOverlays();
+        return;
+      }
+      const r = targeting === "fortify" ? fortifyHex(state, sel, clickedHex) : fireMission(state, sel, clickedHex, targeting);
+      if (r.ok) {
+        targeting = null;
+        afterAction();
+      } else {
+        notice = r.reason ?? "invalid target"; // stay in targeting; let them re-aim
+        renderBar();
+      }
+      return;
+    }
 
     // Begin a TURN-IN-PLACE when pressing the selected unit itself (its marker
     // or its hex) — drag aims the new facing, release commits it as the move.
@@ -256,9 +294,11 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     } else if (unitId != null) {
       selectedId = unitId; // select (own units, or enemies where belief puts them)
       inspectHex = null;
+      targeting = null;
     } else {
       selectedId = null; // pressed empty ground → deselect + inspect the terrain
       inspectHex = clickedHex;
+      targeting = null;
     }
     refresh();
   }
@@ -273,10 +313,20 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
       }
       return;
     }
-    // Hover feedback (cheap): outline the hex, pointer-cursor over units.
+    // Hover feedback (cheap): outline the hex, pointer-cursor over units; while
+    // a mission targets, the footprint preview tracks the cursor.
     if (ev.target !== view.renderer.domElement || playing) return;
     setRay(ev);
-    stage.setHover(pickHex());
+    const h = pickHex();
+    stage.setHover(h);
+    if (targeting && targeting !== "fortify") {
+      if ((h && !hoverHex) || (!h && hoverHex) || (h && hoverHex && !hexEquals(h, hoverHex))) {
+        hoverHex = h;
+        refreshOverlays();
+      }
+      view.renderer.domElement.style.cursor = "crosshair";
+      return;
+    }
     view.renderer.domElement.style.cursor = pickUnit() !== null ? "pointer" : "default";
   }
 
@@ -380,6 +430,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     dragging = false;
     inspectHex = null;
     notice = null;
+    targeting = null;
     void playback();
   }
 
@@ -410,7 +461,14 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     let text = "";
     if (ev.kind === "move") text = `${name(ev.id)} moves ${ev.path.length} hex${ev.path.length === 1 ? "" : "es"}`;
     else if (ev.kind === "face") text = `${name(ev.id)} turns in place`;
-    else if (ev.kind === "resupply") {
+    else if (ev.kind === "mission") {
+      text =
+        ev.mission === "suppress"
+          ? `${name(ev.id)} fires a suppression mission — <span class="log-pen">${ev.suppressedIds.length} unit${ev.suppressedIds.length === 1 ? "" : "s"} suppressed</span>`
+          : `${name(ev.id)} lays a smoke screen`;
+    } else if (ev.kind === "build") {
+      text = `${name(ev.id)} fortifies the position`;
+    } else if (ev.kind === "resupply") {
       const parts = [ev.ammo > 0 ? `+${ev.ammo} ammo` : "", ev.fuel > 0 ? `+${ev.fuel} fuel` : ""].filter(Boolean).join(", ");
       text = `${name(ev.id)} resupplies ${name(ev.targetId)} (${parts || "topped up"})`;
     } else if (ev.kind === "fire") {
@@ -426,11 +484,13 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     if (text) logLines.push(`<div class="log-line">${text}</div>`);
   }
 
-  /** Could the player's side see this event happen? */
+  /** Could the player's side see this event happen? (Artillery missions are
+   *  always noticed — a barrage landing is loud and luminous.) */
   function eventVisible(ev: GameEvent): boolean {
     if (ev.kind === "move" || ev.kind === "face") return stage.shownLive(ev.id);
     if (ev.kind === "resupply") return stage.shownLive(ev.id) || stage.shownLive(ev.targetId);
     if (ev.kind === "fire") return stage.shownLive(ev.id) || stage.shownLive(ev.targetId);
+    if (ev.kind === "build") return stage.shownLive(ev.id);
     return true;
   }
 
@@ -496,32 +556,58 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
       ? ""
       : notice
         ? `✕ ${notice}`
-        : pendingMove
-          ? pendingMove.rotate
-            ? "Drag to turn in place — release to set the facing"
-            : "Drag to aim the unit's final facing — release to confirm"
-          : sel && readyToOrder(state, sel)
-            ? "Hold a blue hex to move (drag to face) · hold the unit to turn · click red to fire, green to resupply"
-            : "Select one of your support units (board or card) · right-drag pans, wheel zooms";
+        : targeting
+          ? targeting === "fortify"
+            ? "Click a highlighted hex to fortify — Esc cancels"
+            : `Click the ${targeting === "suppress" ? "suppression" : "smoke"} target hex — Esc cancels`
+          : pendingMove
+            ? pendingMove.rotate
+              ? "Drag to turn in place — release to set the facing"
+              : "Drag to aim the unit's final facing — release to confirm"
+            : sel && readyToOrder(state, sel)
+              ? "Hold a blue hex to move (drag to face) · hold the unit to turn · click red to fire, green to resupply"
+              : "Select one of your support units (board or card) · right-drag pans, wheel zooms";
     barEl.appendChild(hint);
 
     if (!decided) {
-      if (sel && canReserve(state, sel)) {
-        const rsv = document.createElement("button");
-        rsv.className = "btn btn-alt";
-        rsv.textContent = "Hold in reserve";
-        rsv.addEventListener("click", () => {
-          sel.reserved = true;
-          selectedId = null;
-          refresh();
+      const mkBtn = (label: string, cls: string, onClick: () => void) => {
+        const b = document.createElement("button");
+        b.className = cls;
+        b.textContent = label;
+        b.addEventListener("click", onClick);
+        barEl.appendChild(b);
+      };
+      if (targeting) {
+        mkBtn("Cancel", "btn btn-alt", () => {
+          targeting = null;
+          notice = null;
+          refreshOverlays();
         });
-        barEl.appendChild(rsv);
+      } else {
+        // Support verbs for the selected unit (artillery missions / engineering).
+        if (sel) {
+          const sv = supportActions(state, sel);
+          const enterTargeting = (t: MissionKind | "fortify") => () => {
+            targeting = t;
+            notice = null;
+            hoverHex = null;
+            refreshOverlays();
+          };
+          if (sv.missions) {
+            mkBtn("☄ Suppress", "btn btn-alt", enterTargeting("suppress"));
+            mkBtn("▒ Smoke", "btn btn-alt", enterTargeting("smoke"));
+          }
+          if (sv.fortify) mkBtn("▦ Fortify", "btn btn-alt", enterTargeting("fortify"));
+          if (canReserve(state, sel)) {
+            mkBtn("Hold in reserve", "btn btn-alt", () => {
+              sel.reserved = true;
+              selectedId = null;
+              refresh();
+            });
+          }
+        }
+        mkBtn(`End ${state.phase} phase ▸`, "btn", endPhase);
       }
-      const btn = document.createElement("button");
-      btn.className = "btn";
-      btn.textContent = `End ${state.phase} phase ▸`;
-      btn.addEventListener("click", endPhase);
-      barEl.appendChild(btn);
     }
   }
 
@@ -569,6 +655,24 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     if (!hudEl) return;
     const obj = state.objective;
     hudEl.innerHTML = `VANTAGE — ${state.map.name}&nbsp;&nbsp;·&nbsp;&nbsp;${obj.kind.toUpperCase()} — attacker ${obj.attacker.toUpperCase()} · you run ${playerSide.toUpperCase()} support`;
+  }
+
+  /** The commander's requests — what the autonomous main effort needs from YOU. */
+  function renderNeeds(): void {
+    needsEl.replaceChildren();
+    if (state.outcome !== "ongoing") return;
+    const needs = commanderNeeds(state, playerSide);
+    if (needs.length === 0) return;
+    const head = document.createElement("div");
+    head.className = "needs-head";
+    head.textContent = "COMMANDER";
+    needsEl.appendChild(head);
+    for (const n of needs.slice(0, 5)) {
+      const line = document.createElement("div");
+      line.className = n.urgency === "warn" ? "needs-line needs-warn" : "needs-line";
+      line.textContent = `${n.urgency === "warn" ? "▲" : "▸"} ${n.text}`;
+      needsEl.appendChild(line);
+    }
   }
 
   function renderEnd(): void {
@@ -643,6 +747,14 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
   // releases over a HUD element) still aims and commits correctly.
   window.addEventListener("mousemove", onPointerMove);
   window.addEventListener("mouseup", onPointerUp);
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (targeting) targeting = null; // back out of the support verb first…
+    else if (pendingMove) (pendingMove = null), (dragging = false);
+    else selectedId = null; // …then drop the selection
+    notice = null;
+    refresh();
+  });
   view.renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
   refresh();
 }

@@ -77,6 +77,17 @@
       #inspect .live { color: #7fd0ff; font-weight: 700; }
       #inspect .stale { color: #c9a55a; }
 
+      /* Commander needs — what the autonomous main effort is asking of you. */
+      #needs {
+        position: fixed; top: 38px; left: 12px; width: 280px; user-select: none;
+        background: rgba(10, 13, 20, 0.78); border: 1px solid #232d45; border-radius: 8px;
+        padding: 7px 10px; font-size: 10px; line-height: 1.45;
+      }
+      #needs:empty { display: none; }
+      #needs .needs-head { font-size: 9px; font-weight: 800; letter-spacing: 1.5px; color: #5f6f92; margin-bottom: 4px; }
+      #needs .needs-line { color: #9fb4d8; margin-top: 2px; }
+      #needs .needs-warn { color: #ffb27a; font-weight: 600; }
+
       /* Combat log — fog-honest scrolling record (left side). */
       #log {
         position: fixed; left: 12px; bottom: 10px; width: 250px; max-height: 30vh;
@@ -123,6 +134,7 @@
     <div id="cards"></div>
     <div id="inspect"></div>
     <div id="log"></div>
+    <div id="needs"></div>
     <div id="end"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

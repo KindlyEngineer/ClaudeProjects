@@ -50,6 +50,7 @@ function mkState(seed: number, units: UnitInstance[]): GameState {
     rngState: seed >>> 0,
     rollLog: [],
     events: [],
+    effects: [],
     intents: {},
     belief: { blue: new Map(), red: new Map() },
     posture: { blue: { kind: "hold", since: 1, targetId: null }, red: { kind: "hold", since: 1, targetId: null } },
