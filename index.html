@@ -76,6 +76,44 @@
       #inspect .foot { font-size: 8.5px; color: #7e8eae; margin-top: 5px; font-style: italic; }
       #inspect .live { color: #7fd0ff; font-weight: 700; }
       #inspect .stale { color: #c9a55a; }
+
+      /* Combat log — fog-honest scrolling record (left side). */
+      #log {
+        position: fixed; left: 12px; bottom: 10px; width: 250px; max-height: 30vh;
+        overflow-y: auto; user-select: none; font-size: 9.5px; line-height: 1.45;
+        background: rgba(10, 13, 20, 0.78); border: 1px solid #232d45; border-radius: 8px;
+        padding: 6px 9px; color: #aab8d4; scrollbar-width: thin;
+      }
+      #log:empty { display: none; }
+      #log .log-turn { color: #eaf0ff; font-weight: 700; margin-top: 4px; }
+      #log .log-phase { color: #5f6f92; }
+      #log .log-us { color: #8ab8ff; font-weight: 600; }
+      #log .log-them { color: #ff9a8a; font-weight: 600; }
+      #log .log-miss { color: #8ea0c4; }
+      #log .log-pen { color: #ffb27a; }
+      #log .log-kill { color: #ff5a4a; font-weight: 800; }
+
+      /* Match-end overlay. */
+      #end { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        pointer-events: none; }
+      #end:empty { display: none; }
+      .end-box {
+        pointer-events: auto; text-align: center; min-width: 320px;
+        background: rgba(10, 13, 20, 0.94); border-radius: 14px; padding: 26px 34px;
+        border: 1px solid #2a3550; box-shadow: 0 12px 60px rgba(0,0,0,0.6);
+      }
+      .end-win { border-color: #4a90ff; }
+      .end-loss { border-color: #ff5a4a; }
+      .end-title { font-size: 24px; font-weight: 800; letter-spacing: 1.5px; color: #eaf0ff; }
+      .end-win .end-title { color: #9fd0ff; }
+      .end-loss .end-title { color: #ff9a8a; }
+      .end-stats { font-size: 12px; color: #8ea0c4; margin-top: 10px; }
+      .end-row { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
+      .end-row .btn {
+        font: inherit; font-size: 12px; font-weight: 700; color: #06203a;
+        background: #7fb0ff; border: none; border-radius: 7px; padding: 8px 14px; cursor: pointer;
+      }
+      .end-row .btn-alt { background: #e6c84a; }
     </style>
   </head>
   <body>
@@ -84,6 +122,8 @@
     <div id="bar"></div>
     <div id="cards"></div>
     <div id="inspect"></div>
+    <div id="log"></div>
+    <div id="end"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

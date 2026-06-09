@@ -2,6 +2,7 @@ import { RULES } from "../data/rules";
 import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
 import { resolveAttack, inRange, type AttackResult } from "./combat";
+import { emit } from "./events";
 import { transferSupply, type ResupplyResult } from "./logistics";
 import { directionTo, hexDistance, hexKey, type Direction, type Hex } from "./hex";
 import { isEligible } from "./turn";
@@ -58,10 +59,12 @@ export function moveUnit(state: GameState, unit: UnitInstance, path: readonly He
 
   const last = path[path.length - 1];
   const from = path.length >= 2 ? path[path.length - 2] : unit.hex;
+  const start = unit.hex;
   unit.facing = finalFacing ?? directionTo(from, last);
   unit.hex = last;
   unit.fuel -= cost;
   unit.movedThisTurn = true;
+  emit(state, { kind: "move", id: unit.id, side: unit.side, path: path.map((h) => ({ ...h })), from: start, facing: unit.facing });
   return { moved: true, cost };
 }
 
@@ -74,6 +77,7 @@ export function faceUnit(state: GameState, unit: UnitInstance, facing: Direction
   if (!canMove(unit)) return { moved: false, cost: 0, reason: "immobilised" };
   unit.facing = facing;
   unit.movedThisTurn = true;
+  emit(state, { kind: "face", id: unit.id, side: unit.side, facing });
   return { moved: true, cost: 0 };
 }
 
@@ -110,8 +114,27 @@ export function attackUnit(
   target: UnitInstance,
 ): AttackResult {
   if (!canAttack(state, attacker, weaponIndex, target)) return NO_FIRE;
+  const at = { ...target.hex }; // where the shot lands (before any later moves)
   const result = resolveAttack(state, attacker, weaponIndex, target);
-  if (result.fired) attacker.actedThisTurn = true;
+  if (result.fired) {
+    attacker.actedThisTurn = true;
+    emit(state, {
+      kind: "fire",
+      id: attacker.id,
+      side: attacker.side,
+      targetId: target.id,
+      weapon: unitType(attacker.typeId).weapons[weaponIndex].name,
+      from: { ...attacker.hex },
+      at,
+      hit: result.hit,
+      penetrated: result.penetrated,
+      damage: result.damage,
+      arc: result.arc,
+      crit: result.crit,
+      suppression: result.suppression,
+      destroyed: result.destroyed,
+    });
+  }
   return result;
 }
 
@@ -126,7 +149,10 @@ export function resupplyUnit(state: GameState, supplyUnit: UnitInstance, target:
   if (hexDistance(supplyUnit.hex, target.hex) !== 1) return fail("not adjacent");
 
   const result = transferSupply(supplyUnit, target);
-  if (result.ok) supplyUnit.actedThisTurn = true;
+  if (result.ok) {
+    supplyUnit.actedThisTurn = true;
+    emit(state, { kind: "resupply", id: supplyUnit.id, side: supplyUnit.side, targetId: target.id, ammo: result.ammoRestored, fuel: result.fuelRestored });
+  }
   return result;
 }
 

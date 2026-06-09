@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { createView } from "./render/view";
+import { tickAnimations } from "./render/anim";
 import { buildBoard } from "./render/board";
+import { hexToWorld } from "./sim/hex";
 import { createGame, livingUnits } from "./sim/state";
 import { beginTurn } from "./sim/turn";
 import { planForce } from "./sim/plan";
@@ -78,12 +80,22 @@ if (headless) {
   startInteractive(view, state, { selectId, stage: params.has("stage") });
 }
 
+// ?focus=q,r&dist=N — frame the camera on a hex (close-up verification shots).
+if (params.has("focus")) {
+  const [q, r] = (params.get("focus") ?? "0,0").split(",").map(Number);
+  const d = Number(params.get("dist") ?? 7);
+  const w = hexToWorld({ q, r }, state.map.hexSize);
+  view.frame(new THREE.Vector3(w.x - d, 0, w.z - d), new THREE.Vector3(w.x + d, 3, w.z + d));
+}
+
 window.addEventListener("resize", () => view.resize());
 
 let frames = 0;
-function loop(): void {
+function loop(t: number): void {
+  tickAnimations(t); // presentation tweens (movement, fire, floating text)
+  view.tick(); // camera control damping
   view.render();
   if (++frames === 3) (window as unknown as { __vantageReady?: boolean }).__vantageReady = true;
   requestAnimationFrame(loop);
 }
-loop();
+requestAnimationFrame(loop);

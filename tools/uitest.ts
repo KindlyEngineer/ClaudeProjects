@@ -31,7 +31,8 @@ function check(cond: boolean, label: string): void {
   if (!cond) failures.push(label);
 }
 
-/** Drag from `from` to `to` with intermediate steps so mousemove handlers run. */
+/** Drag from `from` to `to` with intermediate steps so mousemove handlers run,
+ *  then wait out the event-playback animation (input is parked while it runs). */
 async function drag(page: Page, from: XY, to: XY): Promise<void> {
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
@@ -40,7 +41,11 @@ async function drag(page: Page, from: XY, to: XY): Promise<void> {
     await page.mouse.move(from.x + ((to.x - from.x) * i) / steps, from.y + ((to.y - from.y) * i) / steps);
   }
   await page.mouse.up();
-  await page.waitForTimeout(120); // let the rebuild settle
+  await page.waitForFunction(
+    () => !(window as unknown as { __vantage: { busy: () => boolean } }).__vantage.busy(),
+    { timeout: 15000 },
+  );
+  await page.waitForTimeout(80); // let the post-playback refresh settle
 }
 
 async function main(): Promise<number> {
@@ -114,6 +119,30 @@ async function main(): Promise<number> {
     check(afterTurn.hex.q === inf.hex.q && afterTurn.hex.r === inf.hex.r, "turn-in-place kept the hex");
     check(afterTurn.facing === 3, `turn-in-place aimed facing = 3 (got ${afterTurn.facing})`);
     check(afterTurn.moved, "turning spent the move activation");
+
+    // ── 3. Fire: plant an enemy next to the recon and click it ────────────────
+    // (Exercises the attack click + the tracer/impact playback path end-to-end.)
+    const enemyHexKey: string = await page.evaluate(() => {
+      const v = (window as unknown as {
+        __vantage: { select: (id: number) => void; state: { units: Array<{ id: number; side: string; typeId: string; hex: { q: number; r: number } }> } };
+      }).__vantage;
+      const recon = v.state.units.find((x) => x.id === 2)!;
+      const enemy = v.state.units.find((x) => x.side === "red" && x.typeId === "infantry")!;
+      enemy.hex = { q: recon.hex.q + 1, r: recon.hex.r }; // adjacent, in the MG's range
+      v.select(2); // reselect so the red target overlay computes
+      return `${enemy.hex.q},${enemy.hex.r}`;
+    });
+    await page.waitForTimeout(80);
+    const enemyPx: XY = await page.evaluate((k) => (window as unknown as { __vantage: { screenOf: (key: string) => XY } }).__vantage.screenOf(k), enemyHexKey);
+    await page.mouse.click(enemyPx.x, enemyPx.y);
+    await page.waitForFunction(() => !(window as unknown as { __vantage: { busy: () => boolean } }).__vantage.busy(), { timeout: 15000 });
+    const fired = await page.evaluate(() => {
+      const v = (window as unknown as { __vantage: { state: { events: Array<{ kind: string; id?: number }>; units: Array<{ id: number; actedThisTurn: boolean }> } } }).__vantage;
+      const ev = [...v.state.events].reverse().find((e) => e.kind === "fire");
+      return { hasFire: !!ev, byRecon: ev?.id === 2, acted: v.state.units.find((u) => u.id === 2)!.actedThisTurn };
+    });
+    check(fired.hasFire && fired.byRecon, "clicking the enemy fired the recon's weapon");
+    check(fired.acted, "firing spent the main action");
 
     check(errors.length === 0, `no page errors${errors.length ? `: ${errors[0]}` : ""}`);
     await browser.close();
