@@ -22,6 +22,13 @@ export const RULES = {
   dryMoveTurns: 2, // ≥ this many dry turns → movement points halved
   dryFireTurns: 3, // ≥ this many dry turns → cannot fire (rationing what's left)
 
+  // Indirect-fire missions (area suppression / smoke screens): saturation trades
+  // ammo for area — no structure damage, guaranteed pressure. Radius 1 = 7 hexes.
+  mission: {
+    ammoCost: 2, // rounds expended per mission (SP artillery carries 6)
+    radius: 1, // target hex + its ring
+  },
+
   // Mech commander utility AI (the player's influence surface). Thresholds below
   // which a mech needs to break contact; weights for scoring candidate moves.
   commander: {

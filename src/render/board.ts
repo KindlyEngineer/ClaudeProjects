@@ -4,7 +4,8 @@ import { hexCorners, hexKey, hexToWorld, type Hex } from "../sim/hex";
 import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
 import type { Side } from "../data/types";
-import { buildUnitMarker, type MarkerData } from "./models";
+import { isScouted } from "../sim/vision";
+import { buildEffectMarker, buildUnitMarker, type MarkerData } from "./models";
 
 // Builds the 2.5D board from game state: a continuous heightmap terrain surface
 // (per-hex elevation, smoothed at shared corners so seams are seamless), a hex
@@ -199,10 +200,30 @@ export function markerDataFor(state: GameState, u: GameState["units"][number], v
   return { ghost: false, data: u };
 }
 
-/** Static board: terrain + a marker per (visible) unit. The headless and
- *  verification path; the interactive game uses the animated stage instead. */
+/** Battlefield effects a side should see: smoke reads from anywhere (it's a
+ *  towering cloud); fortifications only where the side has eyes. No viewSide →
+ *  ground truth (the verification path). */
+export function buildEffectsGroup(state: GameState, viewSide?: Side): THREE.Group {
+  const g = new THREE.Group();
+  const size = state.map.hexSize;
+  let i = 0;
+  for (const e of state.effects) {
+    i++;
+    if (e.kind !== "smoke" && viewSide && !isScouted(state, viewSide, e.hex)) continue;
+    const marker = buildEffectMarker(e.kind, i);
+    const c = hexToWorld(e.hex, size);
+    marker.scale.setScalar(1.6);
+    marker.position.set(c.x, hexSurfaceY(state, e.hex), c.z);
+    g.add(marker);
+  }
+  return g;
+}
+
+/** Static board: terrain + effects + a marker per (visible) unit. The headless
+ *  and verification path; the interactive game uses the animated stage instead. */
 export function buildBoard(state: GameState, opts: BoardOpts = {}): Board {
   const board = buildTerrain(state);
+  board.group.add(buildEffectsGroup(state, opts.viewSide));
   const size = state.map.hexSize;
   for (const u of state.units) {
     const m = markerDataFor(state, u, opts.viewSide);

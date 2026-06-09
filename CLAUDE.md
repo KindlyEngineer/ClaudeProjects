@@ -42,6 +42,9 @@ by an autonomous main effort.
     - `logistics.ts` — finite ammo/fuel, resupply, supply-line tracing + dry-out
     - `vision.ts` — per-side sight (LOS-gated); forward-observer targeting
     - `pathing.ts` — Dijkstra reachability for the AI
+    - `effects.ts` — battlefield effects (smoke/fortifications) + the SHARED
+      ground queries (moveCostAt / coverAt / sightBlockedAt) every consumer uses
+    - `needs.ts` — the commander's read-only requests to the player (legibility)
     - `commander.ts` — the inspectable utility AI for the mechs + intent string
     - `objective.ts` — Seize evaluation + win/loss
     - `match.ts` — headless match runner + support policies (self-play seam)

@@ -1,5 +1,5 @@
-import { terrain } from "../data/terrain";
 import { movePoints } from "./actions";
+import { moveCostAt } from "./effects";
 import { hexKey, neighbors, type Hex } from "./hex";
 import { livingUnits, type GameState, type UnitInstance } from "./state";
 
@@ -32,9 +32,7 @@ export function reachable(state: GameState, unit: UnitInstance): Map<string, Rea
     const node = nodes.get(cur.key)!;
     if (cur.cost > node.cost) continue;
     for (const n of neighbors(node.hex)) {
-      const cell = state.cells.get(hexKey(n));
-      if (!cell) continue;
-      const mc = terrain(cell.terrain).moveCost;
+      const mc = moveCostAt(state, n); // terrain + battlefield effects
       if (!Number.isFinite(mc)) continue;
       if (occupied(state, n, unit.id)) continue;
       const nc = node.cost + mc;

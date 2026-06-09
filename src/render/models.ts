@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { EffectId } from "../data/effects";
 import type { Side, UnitClass } from "../data/types";
 import { unitType } from "../data/units";
 import { hexToWorld, neighbor, type Direction, type Hex } from "../sim/hex";
@@ -217,6 +218,46 @@ export function buildUnitModel(typeId: string, side: Side): UnitModel {
     case "supply":
       return supplyModel(color);
   }
+}
+
+/** Battlefield-effect marker: a smoke cloud (translucent puffs) or a
+ *  fortification (an arc of sandbag blocks). Built per hex; no shadows for
+ *  smoke so the cloud reads soft. */
+export function buildEffectMarker(kind: EffectId, seed: number): THREE.Group {
+  const g = new THREE.Group();
+  if (kind === "smoke") {
+    const m = new THREE.MeshStandardMaterial({ color: 0x9aa0a8, transparent: true, opacity: 0.34, roughness: 1, depthWrite: false });
+    const puffs = [
+      [0, 0.5, 0, 0.46],
+      [0.32, 0.34, 0.18, 0.3],
+      [-0.3, 0.4, -0.12, 0.34],
+      [0.05, 0.74, -0.2, 0.28],
+      [-0.12, 0.3, 0.3, 0.26],
+    ];
+    for (const [x, y, z, r] of puffs) {
+      const p = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), m);
+      p.position.set(x + (seed % 3) * 0.04, y, z - (seed % 2) * 0.05);
+      g.add(p);
+    }
+  } else {
+    const bag = new THREE.MeshStandardMaterial({ color: 0x6e5d41, roughness: 0.95, metalness: 0 });
+    for (let i = 0; i < 5; i++) {
+      const a = (Math.PI / 4.4) * (i - 2) + (seed % 5) * 0.25; // an arc, varied by seed
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.13), bag);
+      b.position.set(Math.cos(a) * 0.52, 0.06, Math.sin(a) * 0.52);
+      b.rotation.y = -a;
+      b.castShadow = true;
+      g.add(b);
+      if (i % 2 === 0) {
+        const top = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.12), bag);
+        top.position.set(Math.cos(a) * 0.52, 0.16, Math.sin(a) * 0.52);
+        top.rotation.y = -a + 0.15;
+        top.castShadow = true;
+        g.add(top);
+      }
+    }
+  }
+  return g;
 }
 
 /** A burnt-out wreck where a unit died: scorch ring + collapsed dark hull. */

@@ -209,6 +209,46 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
     playback → action spent) — 11 e2e checks total.
   - Still deferred: undo, per-weapon manual override, idle animations.
 
+- **FX-1 — Support verbs: battlefield effects, fire missions, commander needs** ✅
+  The function slice: the player's own tools get DEPTH, and the commander gets a
+  voice. This is where "win through support geometry" becomes literal.
+  - **Battlefield effects substrate** (`data/effects.ts` + `sim/effects.ts`):
+    smoke (blocks LOS, dissipates after 2 turns) and fortifications (+2 move
+    cost, +2 cover, permanent) as data rows. The load-bearing design: all ground
+    questions now flow through three SHARED queries — `moveCostAt`, `coverAt`,
+    `sightBlockedAt` — used by movement, pathing, combat to-hit, vision and the
+    AI's own scoring. Laying smoke genuinely blinds every consumer; fortifying
+    genuinely slows and shelters. New effects = new rows, zero new branches.
+  - **Fire missions** (`actions.fireMission`): indirect-fire area missions over a
+    7-hex footprint, costing 2 rounds. SUPPRESS rattles every enemy in the area
+    (no structure damage — saturation pins, aimed fire kills) and requires an
+    observer on the target (forward-observer rule); SMOKE lays a sight-blocking
+    screen and may target unobserved ground. **Fortify** (`actions.fortifyHex`):
+    engineers entrench their own or an adjacent hex.
+  - **The AI uses the same verbs** (soundness directive): artillery fires an
+    area mission when 2+ visible enemies share a footprint (saturation beats
+    plinking); a DEFENDING engineer on a hold digs its position in. Self-play
+    consequence, verified: prepared defences got stronger (Ridge attacker
+    18% all-AI) while the supported-attack proof still passes — sharpening the
+    core premise that the player's support is what cracks a defence.
+  - **Commander needs** (`sim/needs.ts` + the COMMANDER panel): read-only
+    requests derived from the SAME signals the mech AI acts on — "low ammo —
+    resupply it or it breaks contact", "approach unscouted — needs recon eyes
+    forward", "developing — suppress the defence to open the assault window",
+    cut-off/shaken/immobilised warnings. The legibility loop the hypothesis
+    rests on, without violating the no-tasking rule (it's a one-way radio).
+  - **UI**: targeting mode with live footprint preview under the cursor
+    (☄ Suppress / ▒ Smoke / ▦ Fortify buttons in the bar), Esc backs out
+    (targeting → pending move → selection), fog-aware smoke/fortification
+    markers (billowing puffs / sandbag arcs; enemy forts render only where
+    scouted, smoke clouds read from anywhere), barrage playback (rolling
+    flashes across the footprint), log lines. `?fxdemo` drops sample effects
+    for screenshot verification.
+  - **Verification**: 126 vitest tests (effects/missions/fortify/AI-usage/needs
+    suites); `npm run uitest` extended to drive the FULL mission flow through
+    the real UI (End Phase → select guns → Smoke → click target → 7-hex screen
+    laid, action spent) — 15 e2e checks; self-play 0 invariant violations.
+
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 
 Per the owner: the AI must (a) never behave tactically/logically unsoundly for

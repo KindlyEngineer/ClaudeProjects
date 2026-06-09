@@ -1,17 +1,16 @@
-import { terrain } from "../data/terrain";
 import type { Side } from "../data/types";
-import { hexDistance, hexKey, hexLine, type Hex } from "./hex";
+import { sightBlockedAt } from "./effects";
+import { hexDistance, hexLine, type Hex } from "./hex";
 import { effectiveVision, livingUnits, type GameState, type UnitInstance } from "./state";
 
 // Per-side vision (brief §2): the commander acts only on what its side can see —
 // "no recon → blind and cautious." A side sees a hex if any living friendly unit
 // is within its (sensors-crit-adjusted) sight range AND has a clear line of
-// sight. In v0, blocking terrain (woods/urban) is the only thing that breaks LOS
-// — elevation LOS arrives in v1.
+// sight. Blocking terrain (woods/urban) and battlefield effects (smoke) break
+// the line — elevation LOS arrives in v1.
 
 export function blocksSight(state: GameState, h: Hex): boolean {
-  const cell = state.cells.get(hexKey(h));
-  return !!cell && terrain(cell.terrain).blocksLineOfSight;
+  return sightBlockedAt(state, h);
 }
 
 /** Clear line of sight between two hexes — intervening blocking terrain breaks

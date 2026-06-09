@@ -4,8 +4,9 @@ import { RULES } from "../data/rules";
 import type { CritState, WeaponDef } from "../data/types";
 import { unitType } from "../data/units";
 import { rollDice } from "./dice";
+import { coverAt } from "./effects";
 import { armorArc, hexDistance, type Arc } from "./hex";
-import { canFire, terrainAt, type GameState, type UnitInstance } from "./state";
+import { canFire, type GameState, type UnitInstance } from "./state";
 
 // The one uniform combat model for EVERY unit (mech, tank, gun, infantry):
 //   facing armour  →  structure  →  shared crit table  +  suppression.
@@ -50,9 +51,10 @@ export function arcArmor(attacker: UnitInstance, target: UnitInstance): number {
   return unitType(target.typeId).armor[attackArc(attacker, target)];
 }
 
-/** To-hit chance in [minHit, maxHit] after cover and attacker-suppression mods. */
+/** To-hit chance in [minHit, maxHit] after cover and attacker-suppression mods.
+ *  Cover counts terrain AND battlefield effects (a fortified target is harder). */
 export function hitChance(state: GameState, attacker: UnitInstance, weapon: WeaponDef, target: UnitInstance): number {
-  const cover = terrainAt(state, target.hex)?.cover ?? 0;
+  const cover = coverAt(state, target.hex);
   const raw = weapon.accuracy - cover * RULES.coverHitPenalty - attacker.suppression * RULES.suppressionHitPenalty;
   return clamp(raw, RULES.minHit, RULES.maxHit);
 }

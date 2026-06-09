@@ -144,6 +144,40 @@ async function main(): Promise<number> {
     check(fired.hasFire && fired.byRecon, "clicking the enemy fired the recon's weapon");
     check(fired.acted, "firing spent the main action");
 
+    // ── 4. Fire mission: end the recon phase, then SMOKE via the targeting UI ──
+    await page.locator("#bar button", { hasText: "End recon" }).click();
+    await page.waitForFunction(() => !(window as unknown as { __vantage: { busy: () => boolean } }).__vantage.busy(), { timeout: 30000 });
+    const phase = await page.evaluate(() => (window as unknown as { __vantage: { state: { phase: string } } }).__vantage.state.phase);
+    check(phase === "fires", `End Phase advanced to the fires phase (got ${phase})`);
+
+    const targetKey: string = await page.evaluate(() => {
+      const v = (window as unknown as {
+        __vantage: { select: (id: number) => void; state: { units: Array<{ id: number; typeId: string; side: string; hex: { q: number; r: number } }> } };
+      }).__vantage;
+      const guns = v.state.units.find((u) => u.typeId === "artillery" && u.side === "blue")!;
+      v.select(guns.id);
+      return `${guns.hex.q + 6},${guns.hex.r - 3}`; // well inside the 4..34 band
+    });
+    await page.waitForTimeout(80);
+    await page.locator("#bar button", { hasText: "Smoke" }).click();
+    const tgtPx: XY = await page.evaluate((k) => (window as unknown as { __vantage: { screenOf: (key: string) => XY } }).__vantage.screenOf(k), targetKey);
+    await page.mouse.move(tgtPx.x, tgtPx.y); // the footprint preview tracks the cursor
+    await page.mouse.click(tgtPx.x, tgtPx.y);
+    await page.waitForFunction(() => !(window as unknown as { __vantage: { busy: () => boolean } }).__vantage.busy(), { timeout: 30000 });
+    const mission = await page.evaluate(() => {
+      const v = (window as unknown as {
+        __vantage: { state: { effects: Array<{ kind: string }>; events: Array<{ kind: string; mission?: string }>; units: Array<{ typeId: string; side: string; actedThisTurn: boolean }> } };
+      }).__vantage;
+      return {
+        smokeHexes: v.state.effects.filter((e) => e.kind === "smoke").length,
+        missionEvent: v.state.events.some((e) => e.kind === "mission" && e.mission === "smoke"),
+        acted: v.state.units.find((u) => u.typeId === "artillery" && u.side === "blue")!.actedThisTurn,
+      };
+    });
+    check(mission.smokeHexes >= 7, `smoke screen laid (${mission.smokeHexes} hexes)`);
+    check(mission.missionEvent, "mission event recorded");
+    check(mission.acted, "the mission spent the guns' action");
+
     check(errors.length === 0, `no page errors${errors.length ? `: ${errors[0]}` : ""}`);
     await browser.close();
   } finally {
