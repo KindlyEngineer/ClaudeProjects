@@ -2,6 +2,7 @@ import { unitType } from "../data/units";
 import { commandForce } from "./ai";
 import { attackUnit, canAttack, resupplyUnit } from "./actions";
 import { fireBest, stepToward } from "./aiutil";
+import { needsSupply as supplyDeficit } from "./logistics";
 import { hexDistance, type Hex } from "./hex";
 import { evaluateOutcome } from "./objective";
 import { livingUnits, type GameState, type UnitInstance } from "./state";
@@ -67,10 +68,8 @@ function nearestMech(state: GameState, side: "blue" | "red", from: Hex): UnitIns
   return best;
 }
 
-function needsSupply(u: UnitInstance): boolean {
-  const t = unitType(u.typeId);
-  return u.fuel < t.fuelMax * 0.6 || u.ammo.some((a, i) => a < t.weapons[i].ammoMax);
-}
+// Same neediness bar as the AI (logistics.needsSupply at the 60% fuel mark).
+const needsSupply = (u: UnitInstance): boolean => supplyDeficit(u, 0.6);
 
 /** Fire at the most dangerous (highest unsuppressed firepower) reachable enemy,
  *  so suppressive fire degrades the threat that matters most. */

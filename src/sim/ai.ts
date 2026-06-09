@@ -5,7 +5,7 @@ import { unitType } from "../data/units";
 import { attackUnit, canAttack, moveUnit, resupplyUnit } from "./actions";
 import { armorArc, hexDistance, hexKey, type Hex } from "./hex";
 import { believedEnemies, visibleSightings } from "./knowledge";
-import { supplySources } from "./logistics";
+import { needsSupply as supplyDeficit, supplySources } from "./logistics";
 import { pathTo, reachable } from "./pathing";
 import { canMove, livingUnits, terrainAt, type GameState, type UnitInstance } from "./state";
 import { isEligible } from "./turn";
@@ -214,10 +214,8 @@ const ROLE: Record<UnitClass, RoleProfile> = {
   supply: { weights: { objective: 1.3, exposure: -1.2, nearNeedy: 3, supply: 1.0, mutual: 0.6 }, idealRange: 0, action: "resupply", expendable: 0.1 },
 };
 
-function needsSupply(u: UnitInstance): boolean {
-  const t = unitType(u.typeId);
-  return u.fuel < t.fuelMax * 0.6 || u.ammo.some((a, i) => a < t.weapons[i].ammoMax);
-}
+// The AI doesn't chase one-point top-ups — fuel counts as needy below 60%.
+const needsSupply = (u: UnitInstance): boolean => supplyDeficit(u, 0.6);
 
 /** Modulate a role's weights by its assigned task: a counterattack commits hard
  *  (more attack/objective, far less exposure-aversion), a probe pushes forward to

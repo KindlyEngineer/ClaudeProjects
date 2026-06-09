@@ -67,3 +67,37 @@ export function buildFacingPicker(state: GameState, hex: Hex, active: Direction)
   }
   return group;
 }
+
+/** Small billboarded text labels over hexes — the hit-chance preview ("62%")
+ *  above each targetable enemy. */
+export function buildHexLabels(state: GameState, items: ReadonlyArray<{ hex: Hex; text: string }>): THREE.Group {
+  const group = new THREE.Group();
+  const size = state.map.hexSize;
+  for (const item of items) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 96;
+    canvas.height = 48;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "rgba(8,10,14,0.85)";
+    ctx.beginPath();
+    ctx.roundRect(2, 2, 92, 44, 10);
+    ctx.fill();
+    ctx.strokeStyle = "#ff5a4a";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fillStyle = "#ffd9d4";
+    ctx.font = "bold 26px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(item.text, 48, 26);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+    const c = hexToWorld(item.hex, size);
+    sprite.position.set(c.x, hexSurfaceY(state, item.hex) + 3.6, c.z);
+    sprite.scale.set(2.0, 1.0, 1);
+    sprite.renderOrder = 11;
+    group.add(sprite);
+  }
+  return group;
+}

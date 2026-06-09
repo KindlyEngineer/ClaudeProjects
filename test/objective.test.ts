@@ -14,7 +14,10 @@ describe("seize objective evaluation", () => {
   });
 
   it("is ongoing while the mech is off-zone, in time, with units alive", () => {
-    const s = openGame({ objective, units: [place("mech_assault", "blue", axial(1, 2)), place("supply", "blue", axial(1, 1))] });
+    const s = openGame({
+      objective,
+      units: [place("mech_assault", "blue", axial(1, 2)), place("supply", "blue", axial(1, 1)), place("infantry", "red", axial(9, 2))],
+    });
     expect(evaluateOutcome(s)).toBe("ongoing");
   });
 
@@ -30,8 +33,25 @@ describe("seize objective evaluation", () => {
   });
 
   it("red wins when the clock expires unseized", () => {
-    const s = openGame({ objective, units: [place("mech_assault", "blue", axial(1, 2)), place("supply", "blue", axial(1, 1))] });
+    const s = openGame({
+      objective,
+      units: [place("mech_assault", "blue", axial(1, 2)), place("supply", "blue", axial(1, 1)), place("infantry", "red", axial(9, 2))],
+    });
     s.turn = objective.turnLimit + 1;
     expect(evaluateOutcome(s)).toBe("red");
+  });
+
+  it("blue wins at once when the whole defence is destroyed (nobody left to contest)", () => {
+    const s = openGame({
+      objective,
+      units: [
+        place("mech_assault", "blue", axial(1, 2)),
+        place("supply", "blue", axial(1, 1)),
+        place("infantry", "red", axial(6, 2)),
+      ],
+    });
+    expect(evaluateOutcome(s)).toBe("ongoing");
+    find(s, "infantry", "red").structure = 0; // last defender falls
+    expect(evaluateOutcome(s)).toBe("blue"); // no waiting for the walk-in or the clock
   });
 });

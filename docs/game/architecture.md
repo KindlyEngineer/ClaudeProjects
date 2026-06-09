@@ -136,8 +136,43 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
     range/target highlights; `hex.worldToHex` turns a board click into a hex
     (round-trip tested). Headless URL modes (coreproof / skirmish) still render a
     static board for the capture harness.
-  - Deferred to UI-2: per-weapon target picking + hit-chance preview, turning in
-    place (facing change without moving), undo, and camera pan/zoom.
+
+- **Slice 6.1 — UI hardening + player fog (UI-2)** ✅
+  - **Player fog of war.** The interactive board renders AS THE PLAYER'S SIDE
+    SEES IT (`buildBoard`'s `viewSide`): enemies in sight render live, remembered
+    sightings render as faded grey-ring "ghosts" at their LAST-KNOWN hex, and
+    unscouted enemies don't render at all. Selection (`selectableUnitIdAt`) and
+    inspection (`inspectModel`) flow through the side's belief — never ground
+    truth — so recon is load-bearing for the PLAYER, not just the AI. Enemy mech
+    intent banners are hidden in a fogged view. Headless modes (no `viewSide`)
+    still render ground truth for verification.
+  - **Turn-in-place**: press-and-hold the selected unit's own hex and drag —
+    rotation is the unit's move (`actions.faceUnit`; mobility crits forbid it).
+  - **Reserve**: a "Hold in reserve" button defers an unacted unit out of its
+    home phase to commit in maneuver (`reserved` is now cleared each upkeep).
+  - **Hit-chance preview** ("62%" labels over each targetable enemy) computed by
+    the same `hitChance` the roll uses; `attackOptions` now picks each target's
+    BEST weapon (penetration-aware), not the first that reaches.
+  - **Inspect panel** (bottom-right): selected own unit = full data + terrain;
+    selected enemy = believed state only, flagged `IN SIGHT` / `last seen T#`;
+    clicked empty ground = terrain (name/cover/move/LOS/elevation-visual).
+  - **Feedback + legibility**: failed orders surface their reason in the bar;
+    cards add a suppression meter and named crit labels; card-strip scroll is
+    preserved across rebuilds; adjacent mech banners stagger height.
+  - **Correctness/consistency**: the controller consumes the TESTED
+    `ui/control.ts` helpers (no duplicated reachability — the immobilised-unit
+    range bug is dead); one shared `logistics.needsSupply` (UI = any deficit,
+    AI/policies = 60% fuel bar) replaces three private copies; win/loss banner
+    and HUD are side-aware (defence reads "OBJECTIVE DEFENDED", not attacker
+    text); `evaluateOutcome` ends the match at once when the whole defence is
+    destroyed; map orientation convention (blue = min-q edge) documented on
+    `MapDef`; texture disposal on rebuild (CanvasTextures used to leak);
+    `#bar`/`#inspect` hide when empty in headless modes.
+  - **End-to-end gesture test** (`npm run uitest`, `tools/uitest.ts`): drives a
+    REAL mouse press-drag-release through the raycaster in headless Chromium and
+    asserts the unit's resulting hex + facing for both the move and the
+    turn-in-place — covering exactly the glue unit tests can't.
+  - Still deferred: undo, camera pan/zoom, per-weapon manual override.
 
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 

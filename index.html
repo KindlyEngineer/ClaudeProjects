@@ -22,13 +22,17 @@
         background: rgba(10, 13, 20, 0.82); border: 1px solid #2a3550; border-radius: 10px;
         padding: 7px 12px; user-select: none; backdrop-filter: blur(3px);
       }
+      #bar:empty { display: none; } /* headless modes leave it empty */
       #bar .bar-info { font-size: 13px; font-weight: 700; color: #eaf0ff; letter-spacing: 0.4px; }
-      #bar .bar-hint { font-size: 11px; color: #8ea0c4; }
+      #bar .bar-hint { font-size: 11px; color: #8ea0c4; max-width: 380px; }
+      #bar .bar-warn { color: #ffb27a; font-weight: 700; }
       #bar .btn {
         font: inherit; font-size: 12px; font-weight: 700; color: #06203a;
         background: #7fb0ff; border: none; border-radius: 7px; padding: 6px 12px; cursor: pointer;
       }
       #bar .btn:hover { background: #a9caff; }
+      #bar .btn-alt { background: #e6c84a; }
+      #bar .btn-alt:hover { background: #f2dc7e; }
 
       /* Unit info cards — bottom-centre. */
       #cards {
@@ -57,6 +61,21 @@
       .meter .mf { display: block; height: 100%; }
       .intent { font-size: 9.5px; color: #9fd0ff; margin-top: 4px; line-height: 1.25; }
       .status { font-size: 9.5px; color: #ffb27a; margin-top: 3px; }
+
+      /* Inspect panel — whatever is selected or clicked (unit / believed enemy / terrain). */
+      #inspect {
+        position: fixed; right: 12px; bottom: 10px; width: 212px; user-select: none;
+      }
+      #inspect:empty { display: none; }
+      #inspect .inspect-body {
+        box-sizing: border-box; background: rgba(12, 16, 24, 0.92);
+        border: 1px solid #283350; border-left: 4px solid var(--side, #8a8f9a);
+        border-radius: 8px; padding: 8px 10px;
+      }
+      #inspect .terrain { font-size: 9.5px; color: #9bb39b; margin-top: 5px; line-height: 1.3; }
+      #inspect .foot { font-size: 8.5px; color: #7e8eae; margin-top: 5px; font-style: italic; }
+      #inspect .live { color: #7fd0ff; font-weight: 700; }
+      #inspect .stale { color: #c9a55a; }
     </style>
   </head>
   <body>
@@ -64,6 +83,7 @@
     <div id="hud">VANTAGE</div>
     <div id="bar"></div>
     <div id="cards"></div>
+    <div id="inspect"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

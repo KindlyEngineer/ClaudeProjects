@@ -9,6 +9,20 @@ set -uo pipefail
 
 cd "${CLAUDE_PROJECT_DIR:-$(pwd)}" || exit 0
 
+# --- Git: refresh remote refs ---
+# Cloud containers are re-cloned on inactivity and can come up with STALE
+# remote-tracking refs (and a checkout parked on an old commit). Fetch everything
+# up front so origin/* is trustworthy; never auto-reset (that's a human/agent
+# decision), just surface how far behind the checkout is.
+if [ -d .git ]; then
+  git fetch origin >/dev/null 2>&1 || true
+  upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+  if [ -n "$upstream" ]; then
+    behind="$(git rev-list --count "HEAD..$upstream" 2>/dev/null || echo 0)"
+    [ "${behind:-0}" -gt 0 ] && echo "NOTE: checkout is $behind commit(s) behind $upstream — consider 'git reset --hard $upstream' if the tree is clean."
+  fi
+fi
+
 # --- Node ---
 if [ -f package.json ] && [ ! -d node_modules ]; then
   if   [ -f pnpm-lock.yaml ]; then corepack enable >/dev/null 2>&1; pnpm install || true

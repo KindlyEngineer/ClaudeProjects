@@ -92,6 +92,13 @@ export interface UnitPlacement {
   readonly controller?: Controller; // default "ai"; mark player-run units explicitly
 }
 
+/**
+ * BAKED CONVENTION — map orientation. The sim assumes BLUE's home edge is the
+ * minimum-q column and RED's the maximum-q column: supply lines trace to those
+ * edges (`logistics.supplySources`) and the AI's advance/defence geometry keys
+ * off them (`plan.ts`). Author maps with blue deploying west/low-q and red
+ * east/high-q, or both will quietly misbehave.
+ */
 export interface MapDef {
   readonly name: string;
   readonly hexSize: number; // render circumradius

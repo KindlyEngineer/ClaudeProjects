@@ -65,6 +65,18 @@ export function moveUnit(state: GameState, unit: UnitInstance, path: readonly He
   return { moved: true, cost };
 }
 
+/** Turn in place: set facing without leaving the hex. This is the unit's
+ *  movement for the turn (it spends the move activation, not the main action),
+ *  so an unmoved unit can re-front a threat — but not also relocate. */
+export function faceUnit(state: GameState, unit: UnitInstance, facing: Direction): MoveResult {
+  if (unit.movedThisTurn) return { moved: false, cost: 0, reason: "already moved" };
+  if (!isEligible(state, unit)) return { moved: false, cost: 0, reason: "not its phase" };
+  if (!canMove(unit)) return { moved: false, cost: 0, reason: "immobilised" };
+  unit.facing = facing;
+  unit.movedThisTurn = true;
+  return { moved: true, cost: 0 };
+}
+
 const NO_FIRE: AttackResult = {
   fired: false,
   hit: false,

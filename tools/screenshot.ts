@@ -13,54 +13,14 @@
 //          writes tools/shots/swarm.png at that deterministic sim state.
 
 import { spawn } from "node:child_process";
-import type { Browser } from "playwright-core";
-import { setTimeout as sleep } from "node:timers/promises";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
-// WebGL-enabling flags for headless software rendering.
-const GL_ARGS = [
-  "--use-gl=angle",
-  "--use-angle=swiftshader",
-  "--enable-unsafe-swiftshader",
-  "--ignore-gpu-blocklist",
-];
-
-/** Launch Chromium, preferring a normal Playwright browser, else the npm one. */
-async function launchBrowser(): Promise<Browser> {
-  try {
-    const { chromium } = await import("playwright");
-    const b = await chromium.launch({ args: GL_ARGS });
-    console.log("browser: playwright chromium");
-    return b;
-  } catch (err) {
-    console.log(`browser: falling back to @sparticuz/chromium (${(err as Error).message.split("\n")[0]})`);
-    const sparticuz = (await import("@sparticuz/chromium")).default;
-    sparticuz.setGraphicsMode = true; // enable WebGL via swiftshader
-    const { chromium } = await import("playwright-core");
-    const executablePath = await sparticuz.executablePath();
-    return chromium.launch({ executablePath, args: [...sparticuz.args, ...GL_ARGS] });
-  }
-}
+import { launchBrowser, waitForServer } from "./browser";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 4173;
 const URL = `http://localhost:${PORT}/`;
-
-async function waitForServer(url: string, timeoutMs = 20000): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const r = await fetch(url);
-      if (r.ok) return;
-    } catch {
-      // server not up yet
-    }
-    await sleep(250);
-  }
-  throw new Error(`preview server did not become ready at ${url}`);
-}
 
 interface Capture {
   name: string;
