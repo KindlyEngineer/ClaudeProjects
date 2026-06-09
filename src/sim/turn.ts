@@ -2,6 +2,7 @@ import { RULES } from "../data/rules";
 import type { UnitClass } from "../data/types";
 import { unitType } from "../data/units";
 import { updatePostures } from "./assess";
+import { emit } from "./events";
 import { updateBelief } from "./knowledge";
 import { updateSupply } from "./logistics";
 import { livingUnits, type GameState, type Phase, type UnitInstance } from "./state";
@@ -45,6 +46,7 @@ export function isEligible(state: GameState, u: UnitInstance): boolean {
  *  and reset per-turn activation. Run at the start of every turn (incl. turn 1). */
 export function beginTurn(state: GameState): void {
   state.phase = "recon";
+  emit(state, { kind: "turn", n: state.turn });
   updateSupply(state);
   updateBelief(state, "blue"); // refresh each side's fog-limited picture
   updateBelief(state, "red");
@@ -70,6 +72,7 @@ export function nextPhase(state: GameState): boolean {
   const i = phaseIndex(state.phase);
   if (i < PHASES.length - 1) {
     state.phase = PHASES[i + 1];
+    emit(state, { kind: "phase", phase: state.phase });
     return false;
   }
   state.turn += 1;

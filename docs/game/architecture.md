@@ -172,7 +172,42 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
     REAL mouse press-drag-release through the raycaster in headless Chromium and
     asserts the unit's resulting hex + facing for both the move and the
     turn-in-place — covering exactly the glue unit tests can't.
-  - Still deferred: undo, camera pan/zoom, per-weapon manual override.
+
+- **Slice 6.2 — "Feel" (UI-3): events, animation, fidelity** ✅
+  *(Under the owner's 2026-06-09 brief amendment: visual fidelity/animation in
+  scope, procedural/internal preferred.)*
+  - **Sim event stream** (`sim/events.ts`, `GameState.events`): every action
+    appends a plain record of WHAT HAPPENED (move path, shot outcome with
+    arc/crit/suppression, resupply amounts, turn/phase markers). Pure data,
+    append-only, deterministic — consumed by playback and the combat log, unit
+    tested. The sim still never knows about render.
+  - **Animated persistent stage** (`render/stage.ts` + `render/anim.ts`): the
+    interactive board no longer rebuilds per click. Terrain builds once; unit
+    visuals reconcile by appearance-signature; sim events PLAY BACK as
+    presentation — tweened hex-by-hex movement (walk-bob for mechs/infantry),
+    turret aim + barrel recoil + muzzle flash + travelling tracer + impact
+    flash, floating result text ("7 dmg · side armour", "CRIT — mobility",
+    "MISS"), death animation into a **persistent wreck** with scorch ring.
+    Playback is fog-aware: an unseen attacker shelling a seen target reads as
+    incoming fire from nowhere; fights nobody saw don't render at all.
+  - **Procedural multi-part models** (`render/models.ts`): mechs with
+    legs/torso/visor/shoulder cannon (scout = slighter), tanks with
+    hull/tracks/rotating turret, wheeled recon with sensor mast, SP artillery
+    with elevated tube, supply trucks, infantry fire-teams (engineers carry a
+    demo crate). Forward = +X so facing rotates the rig; builders return
+    turret/barrel/muzzle refs for animation. Soft shadows ground everything
+    (`view.ts`: PCFSoft shadow map sized to the board).
+  - **Camera**: right-drag pan + wheel zoom-to-cursor (OrbitControls, rotation
+    locked, left button reserved for command gestures).
+  - **Combat log** (`#log`, fog-honest — only events the player's side saw),
+    **hover** (hex outline + pointer cursor), **match-end overlay** (result,
+    turns, own losses, confirmed kills, replay-same-seed / new-seed buttons).
+  - Mid-turn targeting fix: a click resolves to anything the selected unit can
+    legally SHOOT (live vision) even before the per-turn belief refresh draws it.
+  - `?focus=q,r&dist=N` frames close-up verification shots; `npm run uitest` now
+    also drives a live FIRE through the real input path (click target → tracer
+    playback → action spent) — 11 e2e checks total.
+  - Still deferred: undo, per-weapon manual override, idle animations.
 
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 

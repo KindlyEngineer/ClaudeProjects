@@ -1,10 +1,14 @@
 import * as THREE from "three";
 import type { View } from "../render/view";
-import { buildBoard, hexSurfaceY } from "../render/board";
+import { hexSurfaceY } from "../render/board";
+import { animating } from "../render/anim";
 import { buildFacingPicker, buildHexLabels, buildHexOverlay } from "../render/overlay";
+import { Stage, disposeGroup } from "../render/stage";
 import type { Side } from "../data/types";
+import { unitType } from "../data/units";
 import { moveUnit, attackUnit, faceUnit, resupplyUnit } from "../sim/actions";
 import { commandForce, decideUnit } from "../sim/ai";
+import type { GameEvent } from "../sim/events";
 import { planForce } from "../sim/plan";
 import { directionTo, hexEquals, hexKey, hexToWorld, neighbor, worldToHex, type Direction, type Hex } from "../sim/hex";
 import { evaluateOutcome } from "../sim/objective";
@@ -29,15 +33,14 @@ import {
 // The interactive controller — the human stand-in for the runMatch "player"
 // policy. It drives the sim through ONLY the shared action API and only over the
 // player's own units; the mechs and the enemy stay AI (commandForce). The board
-// is rendered AS THE PLAYER'S SIDE SEES IT (fog of war): enemies appear only
-// where the side's belief puts them. Command follows BattleTech (2018): pick a
-// unit (board marker or card), its reachable hexes light up; PRESS-AND-HOLD a
-// destination, DRAG to aim which hex face the unit ends up fronting, RELEASE to
-// lock it in and execute. Holding the unit's OWN hex turns it in place. A plain
-// click on an enemy fires (hit% is previewed over each target); on a friendly
-// (supply) resupplies; on a unit selects it. "End Phase" hands the phase to the
-// AI for both sides and advances, mirroring runMatch's per-phase ordering
-// (player acts, then commandForce blue/red, then nextPhase).
+// is an animated persistent STAGE rendered as the player's side sees it (fog of
+// war), and every sim mutation is replayed from the EVENT STREAM: moves tween,
+// shots trace and flash, kills leave wrecks, and the combat log scrolls — all
+// fog-aware (you watch only what your side can see). Command follows BattleTech
+// (2018): press-and-hold a destination, drag to aim the final facing, release
+// to execute; holding the unit's own hex turns it in place; plain clicks fire /
+// resupply / select. "End Phase" hands the phase to the AI for both sides and
+// advances, mirroring runMatch's per-phase ordering.
 
 interface Options {
   reach: Map<string, ReachNode>;
@@ -54,7 +57,7 @@ const EMPTY_OPTIONS: Options = { reach: new Map(), moveKeys: new Set(), attack: 
 interface PendingMove {
   dest: Hex;
   path: Hex[];
-  facing: Direction; // current aimed facing (starts at the travel direction)
+  facing: Direction;
   rotate: boolean;
 }
 
@@ -65,7 +68,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
   let dragging = false; // mid press-drag-release facing gesture
   let inspectHex: Hex | null = null; // clicked empty ground → terrain inspection
   let notice: string | null = null; // why the last order didn't happen
-  let framed = false;
+  let playing = false; // event playback in progress → input parked
 
   // Opening intents so the mech banners read on turn 1 (decideUnit is pure).
   beginTurn(state);
@@ -74,21 +77,30 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
   const cardsEl = ensure("cards");
   const barEl = ensure("bar");
   const inspectEl = ensure("inspect");
+  const logEl = ensure("log");
+  const endEl = ensure("end");
   const hudEl = document.getElementById("hud");
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  let boardGroup: THREE.Group | null = null;
+
+  // The persistent animated scene.
+  const stage = new Stage(state);
+  view.scene.add(stage.group);
+  view.frame(stage.bounds.min, stage.bounds.max);
   let overlayGroup: THREE.Group | null = null;
-  let markerGroups: THREE.Object3D[] = [];
-  let terrainMesh: THREE.Object3D | null = null;
+
+  // Event stream cursor: everything before "now" becomes log history (no
+  // animation for the opening upkeep), everything after plays back.
+  let cursor = 0;
+  const logLines: string[] = [];
+  for (; cursor < state.events.length; cursor++) appendLog(state.events[cursor]);
 
   const selectedUnit = (): UnitInstance | undefined =>
     selectedId == null ? undefined : livingUnits(state).find((u) => u.id === selectedId);
 
   /** What the selected unit may do right now (empty unless it's the player's and
-   *  ready). Built on the SAME pure helpers the tests cover (ui/control.ts), so
-   *  the running UI can't drift from the tested rules. */
+   *  ready). Built on the SAME pure helpers the tests cover (ui/control.ts). */
   function currentOptions(): Options {
     const u = selectedUnit();
     if (!u || !readyToOrder(state, u)) return EMPTY_OPTIONS;
@@ -96,40 +108,19 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     return { reach, moveKeys: new Set(reach.keys()), attack: attackOptions(state, u), resupply: resupplyOptions(state, u) };
   }
 
-  function rebuild(): void {
-    if (boardGroup) {
-      view.scene.remove(boardGroup);
-      disposeGroup(boardGroup);
-    }
-    if (overlayGroup) {
-      view.scene.remove(overlayGroup);
-      disposeGroup(overlayGroup);
-    }
-    // Dim the player's units that aren't actionable right now (spent or off-phase).
+  /** Reconcile the stage + overlays + DOM with current state (no animation). */
+  function refresh(): void {
     const dim = new Set<number>();
     for (const u of livingUnits(state, playerSide)) if (u.controller === "player" && !readyToOrder(state, u)) dim.add(u.id);
-
-    const board = buildBoard(state, { dim, selectedId, viewSide: playerSide });
-    boardGroup = board.group;
-    view.scene.add(boardGroup);
-    markerGroups = boardGroup.children.filter((o) => o.userData.unitId !== undefined);
-    terrainMesh = boardGroup.children.find((o) => o.name === "terrain") ?? null;
-
-    overlayGroup = buildSelectionOverlays();
-    view.scene.add(overlayGroup);
-
-    if (!framed) {
-      view.frame(board.min, board.max);
-      framed = true;
-    }
+    stage.sync({ dim, selectedId, viewSide: playerSide });
+    refreshOverlays();
     renderCards();
-    renderBar();
     renderInspect();
     renderHud();
+    renderLog();
+    renderEnd();
   }
 
-  /** Rebuild ONLY the overlay group (cheap) — used while dragging the facing so
-   *  the board geometry/cards aren't re-created on every mouse move. */
   function refreshOverlays(): void {
     if (overlayGroup) {
       view.scene.remove(overlayGroup);
@@ -140,8 +131,30 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     renderBar();
   }
 
+  /** Animate + log every event the sim appended since the last playback. */
+  async function playback(): Promise<void> {
+    playing = true;
+    try {
+      while (cursor < state.events.length) {
+        const ev = state.events[cursor++];
+        appendLog(ev);
+        renderLog();
+        await stage.play(ev);
+      }
+    } finally {
+      playing = false;
+    }
+    refresh();
+  }
+
+  function afterAction(): void {
+    checkOutcome();
+    void playback();
+  }
+
   function buildSelectionOverlays(): THREE.Group {
     const g = new THREE.Group();
+    if (state.outcome !== "ongoing") return g;
     // While aiming a move (or a turn-in-place), the board shows only the
     // destination + the facing rosette, the aimed face tracking the mouse.
     if (pendingMove) {
@@ -181,12 +194,9 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     raycaster.setFromCamera(pointer, view.camera);
   }
 
-  /** Press: on a reachable hex (with a ready unit) begin aiming a move; on the
-   *  unit's own hex begin a turn-in-place; otherwise fire / resupply / select /
-   *  deselect immediately (a plain click). */
   function onPointerDown(ev: MouseEvent): void {
-    if (state.outcome !== "ongoing" || ev.button !== 0) return;
-    pendingMove = null; // clear any stale (e.g. screenshot-staged) aim
+    if (state.outcome !== "ongoing" || ev.button !== 0 || playing) return;
+    pendingMove = null;
     notice = null;
     setRay(ev);
     const sel = selectedUnit();
@@ -220,16 +230,29 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
       return;
     }
 
-    // Plain click: resolve against what the player KNOWS (fog-gated selection).
-    const unitId = pressedUnitId ?? (clickedHex ? selectableUnitIdAt(state, playerSide, clickedHex) : null);
+    // Plain click: resolve against what the player KNOWS (fog-gated selection) —
+    // plus anything the selected unit can legally SHOOT right now (attack options
+    // come from live vision, which can run ahead of the per-turn belief refresh).
+    const attackTargetAt =
+      clickedHex == null
+        ? null
+        : ([...o.attack.keys()].find((id) => {
+            const t = livingUnits(state).find((u) => u.id === id);
+            return t !== undefined && hexEquals(t.hex, clickedHex);
+          }) ?? null);
+    const unitId = pressedUnitId ?? attackTargetAt ?? (clickedHex ? selectableUnitIdAt(state, playerSide, clickedHex) : null);
     if (sel && unitId != null && o.attack.has(unitId)) {
       const target = livingUnits(state).find((u) => u.id === unitId)!;
       const r = attackUnit(state, sel, o.attack.get(unitId)!, target);
       if (!r.fired) notice = "could not fire";
+      afterAction();
+      return;
     } else if (sel && unitId != null && o.resupply.has(unitId)) {
       const target = livingUnits(state).find((u) => u.id === unitId)!;
       const r = resupplyUnit(state, sel, target);
       if (!r.ok) notice = r.reason ?? "could not resupply";
+      afterAction();
+      return;
     } else if (unitId != null) {
       selectedId = unitId; // select (own units, or enemies where belief puts them)
       inspectHex = null;
@@ -237,28 +260,32 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
       selectedId = null; // pressed empty ground → deselect + inspect the terrain
       inspectHex = clickedHex;
     }
-    checkOutcome();
-    rebuild();
+    refresh();
   }
 
-  /** Drag: aim the final facing toward the cursor (snap to the nearest hex face). */
   function onPointerMove(ev: MouseEvent): void {
-    if (!dragging || !pendingMove) return;
-    setRay(ev);
-    const f = facingTowardCursor(pendingMove.dest, pendingMove.facing);
-    if (f !== pendingMove.facing) {
-      pendingMove.facing = f;
-      refreshOverlays();
+    if (dragging && pendingMove) {
+      setRay(ev);
+      const f = facingTowardCursor(pendingMove.dest, pendingMove.facing);
+      if (f !== pendingMove.facing) {
+        pendingMove.facing = f;
+        refreshOverlays();
+      }
+      return;
     }
+    // Hover feedback (cheap): outline the hex, pointer-cursor over units.
+    if (ev.target !== view.renderer.domElement || playing) return;
+    setRay(ev);
+    stage.setHover(pickHex());
+    view.renderer.domElement.style.cursor = pickUnit() !== null ? "pointer" : "default";
   }
 
-  /** Release: lock in the aimed facing and execute the move / turn-in-place. */
   function onPointerUp(ev: MouseEvent): void {
     if (!dragging) return;
     dragging = false;
     if (ev.button !== 0 || !pendingMove) {
       pendingMove = null;
-      rebuild();
+      refresh();
       return;
     }
     setRay(ev);
@@ -277,8 +304,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
       }
     }
     pendingMove = null;
-    checkOutcome();
-    rebuild();
+    afterAction();
   }
 
   /** Stage a move to `dest` (route + initial facing = the travel direction). */
@@ -289,8 +315,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
   }
 
   /** The hex face nearest the direction from `dest`'s centre to the cursor's
-   *  point on the ground plane — how a drag aims the final facing. Falls back to
-   *  `current` when the cursor is right over the centre (no clear direction). */
+   *  point on the ground plane — how a drag aims the final facing. */
   function facingTowardCursor(dest: Hex, current: Direction): Direction {
     const size = state.map.hexSize;
     const c = hexToWorld(dest, size);
@@ -318,8 +343,9 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
 
   /** Nearest unit marker under the pointer, or null. */
   function pickUnit(): number | null {
-    if (markerGroups.length === 0) return null;
-    for (const hit of raycaster.intersectObjects(markerGroups, true)) {
+    const groups = stage.unitGroups();
+    if (groups.length === 0) return null;
+    for (const hit of raycaster.intersectObjects(groups, true)) {
       let o: THREE.Object3D | null = hit.object;
       while (o) {
         if (o.userData.unitId !== undefined) return o.userData.unitId as number;
@@ -331,8 +357,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
 
   /** Hex under the pointer (raycast against the terrain surface), or null. */
   function pickHex(): Hex | null {
-    if (!terrainMesh) return null;
-    const hits = raycaster.intersectObject(terrainMesh, false);
+    const hits = raycaster.intersectObject(stage.terrainMesh(), false);
     if (hits.length === 0) return null;
     const p = hits[0].point;
     return worldToHex(p.x, p.z, state.map.hexSize);
@@ -340,30 +365,78 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
 
   // ── Phase / turn flow ────────────────────────────────────────────────────────
   function endPhase(): void {
-    if (state.outcome !== "ongoing") return;
+    if (state.outcome !== "ongoing" || playing) return;
     // The AI commands its units for this phase (both sides), then advance — the
     // same ordering as runMatch (player has already acted this phase).
     commandForce(state, "blue");
     commandForce(state, "red");
-    if (checkOutcome()) {
-      rebuild();
-      return;
+    if (!checkOutcome()) {
+      nextPhase(state);
+      if (state.phase === "recon") previewIntents(state); // fresh turn → refresh banners
+      checkOutcome();
     }
-    nextPhase(state);
-    if (state.phase === "recon") previewIntents(state); // fresh turn → refresh banners
-    checkOutcome();
     selectedId = null;
     pendingMove = null;
     dragging = false;
     inspectHex = null;
     notice = null;
-    rebuild();
+    void playback();
   }
 
   function checkOutcome(): boolean {
     const o = evaluateOutcome(state);
     if (o !== "ongoing") state.outcome = o;
     return state.outcome !== "ongoing";
+  }
+
+  // ── Combat log (fog-honest: only what the player's side saw) ────────────────
+  function name(id: number): string {
+    const u = state.units.find((x) => x.id === id);
+    if (!u) return "unknown";
+    const chip = u.side === playerSide ? "log-us" : "log-them";
+    return `<span class="${chip}">${unitType(u.typeId).name}</span>`;
+  }
+
+  function appendLog(ev: GameEvent): void {
+    if (ev.kind === "turn") {
+      logLines.push(`<div class="log-turn">— Turn ${ev.n} —</div>`);
+      return;
+    }
+    if (ev.kind === "phase") {
+      logLines.push(`<div class="log-phase">· ${ev.phase} phase ·</div>`);
+      return;
+    }
+    if (!eventVisible(ev)) return; // the fog hides it from the record too
+    let text = "";
+    if (ev.kind === "move") text = `${name(ev.id)} moves ${ev.path.length} hex${ev.path.length === 1 ? "" : "es"}`;
+    else if (ev.kind === "face") text = `${name(ev.id)} turns in place`;
+    else if (ev.kind === "resupply") {
+      const parts = [ev.ammo > 0 ? `+${ev.ammo} ammo` : "", ev.fuel > 0 ? `+${ev.fuel} fuel` : ""].filter(Boolean).join(", ");
+      text = `${name(ev.id)} resupplies ${name(ev.targetId)} (${parts || "topped up"})`;
+    } else if (ev.kind === "fire") {
+      const outcome = !ev.hit
+        ? `<span class="log-miss">miss</span>`
+        : ev.destroyed
+          ? `<span class="log-kill">DESTROYED</span>`
+          : ev.penetrated
+            ? `<span class="log-pen">${ev.damage} dmg (${ev.arc})${ev.crit ? ` · crit: ${ev.crit}` : ""}</span>`
+            : `deflected${ev.suppression ? ` · +${ev.suppression} supp` : ""}`;
+      text = `${name(ev.id)} fires ${ev.weapon} at ${name(ev.targetId)} — ${outcome}`;
+    }
+    if (text) logLines.push(`<div class="log-line">${text}</div>`);
+  }
+
+  /** Could the player's side see this event happen? */
+  function eventVisible(ev: GameEvent): boolean {
+    if (ev.kind === "move" || ev.kind === "face") return stage.shownLive(ev.id);
+    if (ev.kind === "resupply") return stage.shownLive(ev.id) || stage.shownLive(ev.targetId);
+    if (ev.kind === "fire") return stage.shownLive(ev.id) || stage.shownLive(ev.targetId);
+    return true;
+  }
+
+  function renderLog(): void {
+    logEl.innerHTML = logLines.slice(-80).join("");
+    logEl.scrollTop = logEl.scrollHeight;
   }
 
   // ── DOM rendering ────────────────────────────────────────────────────────────
@@ -397,10 +470,11 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
       (m.intent ? `<div class="intent">▸ ${m.intent}</div>` : "") +
       (status ? `<div class="status">${status}</div>` : "");
     el.addEventListener("click", () => {
+      if (playing) return;
       selectedId = m.id;
       pendingMove = null;
       inspectHex = null;
-      rebuild();
+      refresh();
     });
     return el;
   }
@@ -410,15 +484,8 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     const info = document.createElement("div");
     info.className = "bar-info";
     const decided = state.outcome !== "ongoing";
-    const playerAttacks = state.objective.attacker === playerSide;
     info.textContent = decided
-      ? state.outcome === playerSide
-        ? playerAttacks
-          ? "OBJECTIVE SECURED"
-          : "OBJECTIVE DEFENDED"
-        : playerAttacks
-          ? "EFFORT FAILED — objective not taken"
-          : "OBJECTIVE LOST"
+      ? "BATTLE DECIDED"
       : `Turn ${state.turn}/${state.objective.turnLimit}  ·  ${state.phase.toUpperCase()} phase`;
     barEl.appendChild(info);
 
@@ -435,11 +502,10 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
             : "Drag to aim the unit's final facing — release to confirm"
           : sel && readyToOrder(state, sel)
             ? "Hold a blue hex to move (drag to face) · hold the unit to turn · click red to fire, green to resupply"
-            : "Select one of your support units (board or card)";
+            : "Select one of your support units (board or card) · right-drag pans, wheel zooms";
     barEl.appendChild(hint);
 
     if (!decided) {
-      // Hold a unit out of its home phase to commit in the maneuver phase instead.
       if (sel && canReserve(state, sel)) {
         const rsv = document.createElement("button");
         rsv.className = "btn btn-alt";
@@ -447,7 +513,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
         rsv.addEventListener("click", () => {
           sel.reserved = true;
           selectedId = null;
-          rebuild();
+          refresh();
         });
         barEl.appendChild(rsv);
       }
@@ -505,6 +571,41 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     hudEl.innerHTML = `VANTAGE — ${state.map.name}&nbsp;&nbsp;·&nbsp;&nbsp;${obj.kind.toUpperCase()} — attacker ${obj.attacker.toUpperCase()} · you run ${playerSide.toUpperCase()} support`;
   }
 
+  function renderEnd(): void {
+    if (state.outcome === "ongoing") {
+      endEl.replaceChildren();
+      return;
+    }
+    if (endEl.childElementCount > 0) return; // already shown
+    const playerAttacks = state.objective.attacker === playerSide;
+    const won = state.outcome === playerSide;
+    const title = won ? (playerAttacks ? "OBJECTIVE SECURED" : "OBJECTIVE DEFENDED") : playerAttacks ? "EFFORT FAILED" : "OBJECTIVE LOST";
+    const ownLost = state.units.filter((u) => u.side === playerSide && u.structure <= 0).length;
+    const kills = stage.wreckCount(playerSide === "blue" ? "red" : "blue");
+    const box = document.createElement("div");
+    box.className = "end-box " + (won ? "end-win" : "end-loss");
+    box.innerHTML =
+      `<div class="end-title">${title}</div>` +
+      `<div class="end-stats">turn ${Math.min(state.turn, state.objective.turnLimit)} of ${state.objective.turnLimit} · own losses ${ownLost} · confirmed kills ${kills}</div>`;
+    const again = document.createElement("button");
+    again.className = "btn";
+    again.textContent = "Replay (same seed)";
+    again.addEventListener("click", () => location.reload());
+    const fresh = document.createElement("button");
+    fresh.className = "btn btn-alt";
+    fresh.textContent = "New seed";
+    fresh.addEventListener("click", () => {
+      const url = new URL(location.href);
+      url.searchParams.set("seed", String(Number(url.searchParams.get("seed") ?? 1) + 1));
+      location.href = url.toString();
+    });
+    const row = document.createElement("div");
+    row.className = "end-row";
+    row.append(again, fresh);
+    box.appendChild(row);
+    endEl.appendChild(box);
+  }
+
   // ?stage pre-positions a move (farthest reachable hex) so a screenshot can show
   // the facing picker without a synthetic click.
   if (opts.stage) {
@@ -524,9 +625,10 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     state,
     select: (id: number) => {
       selectedId = id;
-      rebuild();
+      refresh();
     },
     moves: () => [...currentOptions().moveKeys],
+    busy: () => playing || animating(),
     screenOf: (key: string) => {
       const [q, r] = key.split(",").map(Number);
       const w = hexToWorld({ q, r }, state.map.hexSize);
@@ -542,7 +644,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
   window.addEventListener("mousemove", onPointerMove);
   window.addEventListener("mouseup", onPointerUp);
   view.renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
-  rebuild();
+  refresh();
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -570,21 +672,4 @@ function ensure(id: string): HTMLElement {
     document.body.appendChild(el);
   }
   return el;
-}
-
-/** Free GPU resources for a discarded group. Disposing a material does NOT
- *  dispose its texture, and every badge/banner/label is a fresh CanvasTexture —
- *  without this, each rebuild leaks GPU textures. */
-function disposeGroup(g: THREE.Group): void {
-  g.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    // Sprites share one module-level geometry across ALL sprites — never dispose it.
-    if (mesh.geometry && !(o instanceof THREE.Sprite)) mesh.geometry.dispose();
-    const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
-    for (const m of mats) {
-      const map = (m as THREE.Material & { map?: THREE.Texture | null }).map;
-      if (map) map.dispose();
-      m.dispose();
-    }
-  });
 }

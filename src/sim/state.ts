@@ -1,6 +1,7 @@
 import type { Controller, MapCell, MapDef, ObjectiveDef, Side } from "../data/types";
 import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
+import type { GameEvent } from "./events";
 import { hexKey, type Direction, type Hex } from "./hex";
 
 // Runtime game state. Plain, serializable data advanced by pure functions in
@@ -44,6 +45,7 @@ export interface GameState {
   seed: number;
   rngState: number; // advanced by the dice roller (slice 2)
   rollLog: RollRecord[];
+  events: GameEvent[]; // append-only what-happened stream (animation + combat log)
   intents: Record<number, string>; // mech id → the commander's current intent
   belief: { blue: Belief; red: Belief }; // fog-limited knowledge each side reasons on
   posture: { blue: PostureState; red: PostureState }; // operational posture per side
@@ -128,6 +130,7 @@ export function createGame(map: MapDef, seed: number): GameState {
     seed,
     rngState: seed >>> 0,
     rollLog: [],
+    events: [],
     intents: {},
     belief: { blue: new Map(), red: new Map() },
     posture: {

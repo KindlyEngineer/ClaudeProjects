@@ -140,6 +140,11 @@ destroyed, or all player support units depleted.
 - **Turn structure:** phased initiative (recon/light first, with a reserve
   mechanic) so recon → fires → maneuver sequencing matters.
 - **Programmer art only.**
+  > **Owner amendment (2026-06-09):** visual fidelity is now in scope — higher
+  > model complexity and animation are welcome. Prefer *procedural/internal*
+  > art (code-built models, shaders, tweens); limited third-party tooling is
+  > acceptable where it pays for itself. This supersedes the "no animation
+  > polish" line in §6 for presentation work; the rest of §6 stands.
 
 ---
 
@@ -200,7 +205,9 @@ If criterion 1 cannot be met, stop and report.
 - No mech customization / mechlab.
 - No heat system.
 - No save/load (minimum if unavoidable).
-- No multiplayer. No audio, real art, or animation polish. No UI gold-plating.
+- No multiplayer. No audio. ~~No real art or animation polish~~ *(amended
+  2026-06-09 — see §"Programmer art" note: fidelity/animation now in scope,
+  procedural preferred)*. No UI gold-plating beyond legibility.
 - **No direct player control of mechs and no intent/tasking interface — ever.**
   Load-bearing to the design, not a missing feature.
 
