@@ -18,6 +18,17 @@ export const RULES = {
   suppressionBreak: 8, // reaching this inflicts a "shaken" crit (morale break)
   suppressionDecayPerTurn: 3, // recovered each turn the unit isn't hit
 
+  // Elevation (v1 — the heightmap turns mechanical). Heights are the map's raw
+  // elevation units (MAP01 amplitude ≈ 4.4). Kept gentle so rolling terrain adds
+  // texture and crests matter, without dominating the fight.
+  elevation: {
+    eyeHeight: 1.4, // a unit sees / is seen from this far above its ground
+    losClearance: 0.7, // intervening ground must rise THIS far above the sightline to block it
+    hitBonusPerLevel: 0.04, // direct-fire to-hit bonus per elevation unit of height advantage
+    hitBonusMax: 0.08, // capped — high ground helps, doesn't auto-win
+    climbCostPerLevel: 0.35, // extra MP per elevation unit CLIMBED (descending is free)
+  },
+
   // Logistics dry-out (consecutive turns cut off from a supply source).
   dryMoveTurns: 2, // ≥ this many dry turns → movement points halved
   dryFireTurns: 3, // ≥ this many dry turns → cannot fire (rationing what's left)

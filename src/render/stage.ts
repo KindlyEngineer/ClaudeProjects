@@ -6,7 +6,7 @@ import { hexCorners, hexKey, hexToWorld, type Hex } from "../sim/hex";
 import type { GameState } from "../sim/state";
 import { delay, easeOut, tween } from "./anim";
 import { buildEffectsGroup, buildTerrain, hexSurfaceY, markerDataFor, type Board, type BoardOpts } from "./board";
-import { buildUnitMarker, buildWreck, facingAngle, type Marker } from "./models";
+import { bannerText, buildUnitMarker, buildWreck, facingAngle, type Marker } from "./models";
 
 // The animated interactive scene. Unlike the static board (rebuilt wholesale for
 // headless verification), the stage PERSISTS: terrain is built once, unit
@@ -85,7 +85,7 @@ export class Stage {
       if (!m) continue;
       seen.add(m.data.id);
       const showIntent = !m.ghost && unitType(u.typeId).cls === "mech" && (!opts.viewSide || u.side === opts.viewSide);
-      const intent = showIntent ? this.state.intents[u.id] : undefined;
+      const intent = showIntent ? bannerText(u.callSign, this.state.intents[u.id]) : undefined;
       const dim = opts.dim?.has(u.id) ?? false;
       const selected = opts.selectedId === m.data.id;
       const sig = [

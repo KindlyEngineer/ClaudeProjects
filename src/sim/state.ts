@@ -15,6 +15,7 @@ export interface UnitInstance {
   typeId: string;
   side: Side;
   controller: Controller; // who issues this unit's orders (ai / player)
+  callSign?: string; // the main effort's name — the entity you serve (mechs only)
   hex: Hex;
   facing: Direction;
   structure: number; // remaining; 0 = destroyed
@@ -90,6 +91,14 @@ export interface PostureState {
   targetId: number | null;
 }
 
+// Call signs for the autonomous main effort (assigned in placement order).
+const CALL_SIGNS = ["Vanguard", "Saber", "Reaper", "Warden", "Talon", "Ronin", "Halberd", "Cobra"] as const;
+
+/** Display name: a mech's call sign (the entity you serve), else its type name. */
+export function unitLabel(u: UnitInstance): string {
+  return u.callSign ?? unitType(u.typeId).name;
+}
+
 let nextId = 1;
 
 /** Construct a fresh game from a map definition and a seed. */
@@ -120,6 +129,13 @@ export function createGame(map: MapDef, seed: number): GameState {
       dryTurns: 0,
     };
   });
+
+  // Call signs for the main effort — the autonomous mechs the player serves get
+  // names, not numbers. Deterministic (assignment order), per side.
+  const counts: Record<Side, number> = { blue: 0, red: 0 };
+  for (const u of units) {
+    if (unitType(u.typeId).cls === "mech") u.callSign = CALL_SIGNS[counts[u.side]++ % CALL_SIGNS.length];
+  }
 
   return {
     map,

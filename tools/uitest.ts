@@ -77,9 +77,9 @@ async function main(): Promise<number> {
     const dest = keys[keys.length - 1];
     const [dq, dr] = dest.split(",").map(Number);
     const destPx: XY = await page.evaluate((k) => (window as unknown as { __vantage: { screenOf: (key: string) => XY } }).__vantage.screenOf(k), dest);
-    // Aim the facing at direction 2 (neighbour q+0, r-1) by dragging toward it.
-    const aimKey = `${dq + 0},${dr - 1}`;
-    const aimPx: XY = await page.evaluate((k) => (window as unknown as { __vantage: { screenOf: (key: string) => XY } }).__vantage.screenOf(k), aimKey);
+    // Aim facing direction 2 (drag toward dir-2; aimScreen mirrors the controller's
+    // plane math so elevation can't skew the projection).
+    const aimPx: XY = await page.evaluate((k) => (window as unknown as { __vantage: { aimScreen: (key: string, dir: number) => XY } }).__vantage.aimScreen(k, 2), dest);
     await drag(page, destPx, aimPx);
 
     const afterMove = await page.evaluate(() => {
@@ -106,9 +106,8 @@ async function main(): Promise<number> {
     });
     const ownKey = `${inf.hex.q},${inf.hex.r}`;
     const ownPx: XY = await page.evaluate((k) => (window as unknown as { __vantage: { screenOf: (key: string) => XY } }).__vantage.screenOf(k), ownKey);
-    // Drag toward direction 3's neighbour (q-1, r+0) → an about-face west.
-    const westKey = `${inf.hex.q - 1},${inf.hex.r}`;
-    const westPx: XY = await page.evaluate((k) => (window as unknown as { __vantage: { screenOf: (key: string) => XY } }).__vantage.screenOf(k), westKey);
+    // Drag toward direction 3 → an about-face west.
+    const westPx: XY = await page.evaluate((k) => (window as unknown as { __vantage: { aimScreen: (key: string, dir: number) => XY } }).__vantage.aimScreen(k, 3), ownKey);
     await drag(page, ownPx, westPx);
 
     const afterTurn = await page.evaluate((id) => {

@@ -7,7 +7,7 @@ import { armorArc, hexDistance, hexEquals, neighbors, type Hex } from "../sim/he
 import { needsSupply } from "../sim/logistics";
 import { reachable, type ReachNode } from "../sim/pathing";
 import { RULES } from "../data/rules";
-import { canFire, canMove, cellAt, livingUnits, type GameState, type Sighting, type UnitInstance } from "../sim/state";
+import { canFire, canMove, cellAt, livingUnits, unitLabel, type GameState, type Sighting, type UnitInstance } from "../sim/state";
 import { isEligible } from "../sim/turn";
 
 // Pure interaction logic for the interactive UI — what the player may select and
@@ -158,7 +158,8 @@ export interface CardModel {
   id: number;
   side: Side;
   abbr: string;
-  name: string;
+  name: string; // call sign for mechs, else the type name
+  subtitle: string | null; // the type name when `name` is a call sign
   controllable: boolean; // player-ordered (vs AI mech / enemy)
   ready: boolean; // actionable this phase → bright; else greyed
   reserved: boolean; // held to commit in the maneuver phase
@@ -180,7 +181,8 @@ export function cardModel(state: GameState, unit: UnitInstance): CardModel {
     id: unit.id,
     side: unit.side,
     abbr: t.cls.charAt(0).toUpperCase(),
-    name: t.name,
+    name: unitLabel(unit),
+    subtitle: unit.callSign ? t.name : null,
     controllable: isPlayerControllable(unit),
     ready: readyToOrder(state, unit),
     reserved: unit.reserved,

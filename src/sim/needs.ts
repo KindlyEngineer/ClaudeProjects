@@ -3,7 +3,7 @@ import type { Side } from "../data/types";
 import { unitType } from "../data/units";
 import { assess, attackerShouldAssault } from "./assess";
 import { sustainmentNeed } from "./ai";
-import { hasCrit, livingUnits, type GameState } from "./state";
+import { hasCrit, livingUnits, unitLabel, type GameState } from "./state";
 
 // The commander's REQUESTS — the legibility surface the whole design rests on.
 // The player can't task the mechs (brief: load-bearing), but they must be able
@@ -23,7 +23,7 @@ export function commanderNeeds(state: GameState, side: Side): CommanderNeed[] {
 
   // Per-mech sustainment — the resupply loop the player owns.
   for (const m of mechs) {
-    const name = unitType(m.typeId).name;
+    const name = unitLabel(m);
     if (!m.inSupply) out.push({ urgency: "warn", text: `${name} is CUT OFF — reopen its supply line` });
     const s = sustainmentNeed(m);
     if (s.need >= RULES.commander.needTrigger) {

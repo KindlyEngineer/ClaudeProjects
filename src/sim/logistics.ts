@@ -102,10 +102,15 @@ export function transferSupply(supplyUnit: UnitInstance, target: UnitInstance): 
   let ammoRestored = 0;
   let fuelRestored = 0;
 
+  // Ammo is discrete whole rounds — transfer integers only, so a fractional
+  // supply budget (fuel is continuous since elevation: climb costs are
+  // fractional) can never leak a fractional round into the ammo count (which
+  // would later underflow past zero on the next shot).
   const maxAmmo = unitType(target.typeId).weapons.map((w) => w.ammoMax);
-  for (let i = 0; i < target.ammo.length && budget > 0; i++) {
+  for (let i = 0; i < target.ammo.length && budget >= 1; i++) {
     const need = maxAmmo[i] - target.ammo[i];
-    const give = Math.min(need, budget);
+    const give = Math.min(need, Math.floor(budget));
+    if (give <= 0) continue;
     target.ammo[i] += give;
     budget -= give;
     ammoRestored += give;

@@ -2,6 +2,7 @@ import { RULES } from "../data/rules";
 import { unitType } from "../data/units";
 import { resolveAttack, inRange, type AttackResult } from "./combat";
 import { addEffect, hasEffect, moveCostAt } from "./effects";
+import { climbCost } from "./elevation";
 import { emit } from "./events";
 import { transferSupply, type ResupplyResult } from "./logistics";
 import { directionTo, hexDistance, hexKey, type Direction, type Hex } from "./hex";
@@ -49,7 +50,7 @@ export function moveUnit(state: GameState, unit: UnitInstance, path: readonly He
     if (hexDistance(prev, step) !== 1) return { moved: false, cost: 0, reason: "non-adjacent step" };
     const cell = state.cells.get(hexKey(step));
     if (!cell) return { moved: false, cost: 0, reason: "off map" };
-    const mc = moveCostAt(state, step); // terrain + battlefield effects
+    const mc = moveCostAt(state, step) + climbCost(state, prev, step); // terrain + effects + the climb
     if (!Number.isFinite(mc)) return { moved: false, cost: 0, reason: "impassable" };
     if (occupant(state, step, unit.id)) return { moved: false, cost: 0, reason: "occupied" };
     cost += mc;

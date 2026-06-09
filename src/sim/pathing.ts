@@ -1,5 +1,6 @@
 import { movePoints } from "./actions";
 import { moveCostAt } from "./effects";
+import { climbCost } from "./elevation";
 import { hexKey, neighbors, type Hex } from "./hex";
 import { livingUnits, type GameState, type UnitInstance } from "./state";
 
@@ -32,7 +33,7 @@ export function reachable(state: GameState, unit: UnitInstance): Map<string, Rea
     const node = nodes.get(cur.key)!;
     if (cur.cost > node.cost) continue;
     for (const n of neighbors(node.hex)) {
-      const mc = moveCostAt(state, n); // terrain + battlefield effects
+      const mc = moveCostAt(state, n) + climbCost(state, node.hex, n); // terrain + effects + the climb
       if (!Number.isFinite(mc)) continue;
       if (occupied(state, n, unit.id)) continue;
       const nc = node.cost + mc;
