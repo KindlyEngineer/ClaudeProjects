@@ -5,7 +5,6 @@ import { animating } from "../render/anim";
 import { buildFacingPicker, buildHexLabels, buildHexOverlay } from "../render/overlay";
 import { Stage, disposeGroup } from "../render/stage";
 import type { Side } from "../data/types";
-import { unitType } from "../data/units";
 import { moveUnit, attackUnit, faceUnit, resupplyUnit, fireMission, fortifyHex, canFireMission, missionArea, type MissionKind } from "../sim/actions";
 import { commandForce, decideUnit } from "../sim/ai";
 import type { GameEvent } from "../sim/events";
@@ -14,7 +13,7 @@ import { planForce } from "../sim/plan";
 import { directionTo, hexEquals, hexKey, hexToWorld, neighbor, worldToHex, type Direction, type Hex } from "../sim/hex";
 import { evaluateOutcome } from "../sim/objective";
 import { pathTo, type ReachNode } from "../sim/pathing";
-import { canMove, livingUnits, type GameState, type UnitInstance } from "../sim/state";
+import { canMove, livingUnits, unitLabel, type GameState, type UnitInstance } from "../sim/state";
 import { beginTurn, nextPhase } from "../sim/turn";
 import {
   attackOptions,
@@ -445,7 +444,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     const u = state.units.find((x) => x.id === id);
     if (!u) return "unknown";
     const chip = u.side === playerSide ? "log-us" : "log-them";
-    return `<span class="${chip}">${unitType(u.typeId).name}</span>`;
+    return `<span class="${chip}">${unitLabel(u)}</span>`;
   }
 
   function appendLog(ev: GameEvent): void {
@@ -520,8 +519,9 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     el.style.setProperty("--side", m.side === "blue" ? "#4a90ff" : "#ff5a4a");
     const status = [...m.crits.map((c) => CRIT_LABEL[c] ?? c), m.inSupply ? "" : "⛌ cut off"].filter(Boolean).join(" · ");
     const tag = m.controllable ? (m.ready ? "READY" : m.reserved ? "RSV" : "—") : "AI";
+    const nm = m.subtitle ? `${m.name}<span class="sub"> ${m.subtitle}</span>` : m.name;
     el.innerHTML =
-      `<div class="card-h"><span class="abbr">${m.abbr}</span><span class="nm">${m.name}</span>` +
+      `<div class="card-h"><span class="abbr">${m.abbr}</span><span class="nm">${nm}</span>` +
       `<span class="tag">${tag}</span></div>` +
       bar("STR", m.structureFrac, "#5ad06a") +
       bar("FUEL", m.fuelFrac, "#7fb0ff") +
@@ -737,6 +737,16 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
       const [q, r] = key.split(",").map(Number);
       const w = hexToWorld({ q, r }, state.map.hexSize);
       const v = new THREE.Vector3(w.x, hexSurfaceY(state, { q, r }), w.z).project(view.camera);
+      const rect = view.renderer.domElement.getBoundingClientRect();
+      return { x: rect.left + ((v.x + 1) / 2) * rect.width, y: rect.top + ((1 - v.y) / 2) * rect.height };
+    },
+    // Screen point to drag to in order to aim facing `dir` from `destKey` —
+    // mirrors facingTowardCursor exactly (the neighbour's XZ at the destination's
+    // plane height), so the e2e test isn't fooled by elevation projection shifts.
+    aimScreen: (destKey: string, dir: Direction) => {
+      const [q, r] = destKey.split(",").map(Number);
+      const nb = hexToWorld(neighbor({ q, r }, dir), state.map.hexSize);
+      const v = new THREE.Vector3(nb.x, hexSurfaceY(state, { q, r }), nb.z).project(view.camera);
       const rect = view.renderer.domElement.getBoundingClientRect();
       return { x: rect.left + ((v.x + 1) / 2) * rect.width, y: rect.top + ((1 - v.y) / 2) * rect.height };
     },

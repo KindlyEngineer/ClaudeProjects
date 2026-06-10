@@ -5,6 +5,7 @@ import type { CritState, WeaponDef } from "../data/types";
 import { unitType } from "../data/units";
 import { rollDice } from "./dice";
 import { coverAt } from "./effects";
+import { heightHitBonus } from "./elevation";
 import { armorArc, hexDistance, type Arc } from "./hex";
 import { canFire, type GameState, type UnitInstance } from "./state";
 
@@ -51,11 +52,14 @@ export function arcArmor(attacker: UnitInstance, target: UnitInstance): number {
   return unitType(target.typeId).armor[attackArc(attacker, target)];
 }
 
-/** To-hit chance in [minHit, maxHit] after cover and attacker-suppression mods.
- *  Cover counts terrain AND battlefield effects (a fortified target is harder). */
+/** To-hit chance in [minHit, maxHit] after cover, attacker-suppression and
+ *  height mods. Cover counts terrain AND battlefield effects (a fortified target
+ *  is harder); direct fire gains a bonus shooting DOWN at a lower target
+ *  (indirect fire arcs over, so height doesn't apply to it). */
 export function hitChance(state: GameState, attacker: UnitInstance, weapon: WeaponDef, target: UnitInstance): number {
   const cover = coverAt(state, target.hex);
-  const raw = weapon.accuracy - cover * RULES.coverHitPenalty - attacker.suppression * RULES.suppressionHitPenalty;
+  const height = weapon.indirect ? 0 : heightHitBonus(state, attacker.hex, target.hex);
+  const raw = weapon.accuracy - cover * RULES.coverHitPenalty - attacker.suppression * RULES.suppressionHitPenalty + height;
   return clamp(raw, RULES.minHit, RULES.maxHit);
 }
 

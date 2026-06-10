@@ -8,7 +8,7 @@ import { armorArc, hexDistance, hexKey, type Hex } from "./hex";
 import { believedEnemies, visibleSightings } from "./knowledge";
 import { needsSupply as supplyDeficit, supplySources } from "./logistics";
 import { pathTo, reachable } from "./pathing";
-import { canMove, livingUnits, type GameState, type UnitInstance } from "./state";
+import { canMove, elevationAt, livingUnits, type GameState, type UnitInstance } from "./state";
 import { isEligible } from "./turn";
 import { isScouted } from "./vision";
 import { aiNoise } from "./ainoise";
@@ -160,6 +160,7 @@ interface AiContext {
   dObjFrom: number;
   dSupFrom: number;
   idealRange: number;
+  enemyElev: number | null; // mean elevation of believed enemies (null = no contact)
 }
 
 type ConsiderationName =
@@ -171,7 +172,8 @@ type ConsiderationName =
   | "cover"
   | "standoff"
   | "mutual"
-  | "nearNeedy";
+  | "nearNeedy"
+  | "highGround";
 
 const CONSIDERATIONS: Record<ConsiderationName, (ctx: AiContext, h: Hex) => number> = {
   objective: (ctx, h) => ctx.dObjFrom - nearestDist(h, ctx.goal),
@@ -187,6 +189,11 @@ const CONSIDERATIONS: Record<ConsiderationName, (ctx: AiContext, h: Hex) => numb
   mutual: (ctx, h) =>
     ctx.friendHexes.length ? -Math.max(0, nearestDist(h, ctx.friendHexes) - RULES.commander.supportRadius) : 0,
   nearNeedy: (ctx, h) => (ctx.needyHexes.length ? -nearestDist(h, ctx.needyHexes) : 0),
+  // Seek ground that OVERLOOKS the enemy (height advantage = LOS + a to-hit
+  // edge), not random peaks: 0 without contact, capped so a unit won't abandon
+  // its job to climb. The AI now reads the heightmap the same way the player can.
+  highGround: (ctx, h) =>
+    ctx.enemyElev === null ? 0 : clamp(elevationAt(ctx.state, h) - ctx.enemyElev, 0, 3),
 };
 
 interface RoleProfile {
@@ -204,12 +211,12 @@ const ROLE: Record<UnitClass, RoleProfile> = {
   // The spearhead: pulled to the objective/seize, but it advances WITH its
   // escort (mutual) rather than soloing into the defence, and breaks contact
   // when its sustainment runs low (supply × need).
-  mech: { weights: { objective: W.wObjective, seize: W.wSeize, supply: W.wSupply, exposure: -W.wThreat, attack: W.wAttack }, idealRange: 0, action: "fire", expendable: 0.4 },
-  recon: { weights: { objective: 1.2, exposure: -2.6, standoff: 1.6, cover: 0.6, supply: 0.5, mutual: 0.4 }, idealRange: 9, action: "fire", expendable: 0.8 },
-  artillery: { weights: { objective: 0.2, exposure: -3.0, standoff: 2.2, cover: 0.5, supply: 0.6, mutual: 0.4 }, idealRange: 12, action: "fire", expendable: 0.1 },
-  armor: { weights: { objective: 2, seize: 25, attack: 4, exposure: -1.0, cover: 0.8, standoff: 0.8, supply: 1.5, mutual: 0.6 }, idealRange: 9, action: "fire", expendable: 0.4 },
-  infantry: { weights: { objective: 1.5, seize: 25, attack: 3, exposure: -1.6, cover: 1.6, supply: 0.8, mutual: 1.0 }, idealRange: 2, action: "fire", expendable: 0.65 },
-  engineer: { weights: { objective: 1.5, attack: 2, exposure: -1.6, cover: 1.4, supply: 0.8, mutual: 1.0 }, idealRange: 2, action: "fire", expendable: 0.5 },
+  mech: { weights: { objective: W.wObjective, seize: W.wSeize, supply: W.wSupply, exposure: -W.wThreat, attack: W.wAttack, highGround: 0.3 }, idealRange: 0, action: "fire", expendable: 0.4 },
+  recon: { weights: { objective: 1.2, exposure: -2.6, standoff: 1.6, cover: 0.6, supply: 0.5, mutual: 0.4, highGround: 0.7 }, idealRange: 9, action: "fire", expendable: 0.8 },
+  artillery: { weights: { objective: 0.2, exposure: -3.0, standoff: 2.2, cover: 0.5, supply: 0.6, mutual: 0.4, highGround: 0.4 }, idealRange: 12, action: "fire", expendable: 0.1 },
+  armor: { weights: { objective: 2, seize: 25, attack: 4, exposure: -1.0, cover: 0.8, standoff: 0.8, supply: 1.5, mutual: 0.6, highGround: 0.4 }, idealRange: 9, action: "fire", expendable: 0.4 },
+  infantry: { weights: { objective: 1.5, seize: 25, attack: 3, exposure: -1.6, cover: 1.6, supply: 0.8, mutual: 1.0, highGround: 0.25 }, idealRange: 2, action: "fire", expendable: 0.65 },
+  engineer: { weights: { objective: 1.5, attack: 2, exposure: -1.6, cover: 1.4, supply: 0.8, mutual: 1.0, highGround: 0.25 }, idealRange: 2, action: "fire", expendable: 0.5 },
   // Supply must keep up with the spearhead to sustain it (cautious, but it can't
   // hang back so far the advance runs dry).
   supply: { weights: { objective: 1.3, exposure: -1.2, nearNeedy: 3, supply: 1.0, mutual: 0.6 }, idealRange: 0, action: "resupply", expendable: 0.1 },
@@ -273,6 +280,7 @@ export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): U
     dObjFrom: nearestDist(unit.hex, goal),
     dSupFrom: nearestDist(unit.hex, supplySources(state, side)),
     idealRange: role.idealRange,
+    enemyElev: believed.length ? believed.reduce((s, e) => s + elevationAt(state, e.hex), 0) / believed.length : null,
   };
 
   const weights: Record<string, number> = { ...taskWeights(role.weights, task) };
@@ -324,7 +332,9 @@ export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): U
   const path = mobile ? pathTo(reach, bestKey) : [];
   const fireTargetId = pickTarget(unit, bestHex, visible);
   const objGain = ctx.dObjFrom - nearestDist(bestHex, goal);
-  const { stance, intent } = describe(cls, ctx, { objGain, exposed: exposureAt(state, side, bestHex, believed), fireTargetId, mobile }, task);
+  // Is the chosen ground commanding — meaningfully above the perceived enemy?
+  const highGround = ctx.enemyElev !== null && elevationAt(state, bestHex) - ctx.enemyElev >= 1.2;
+  const { stance, intent } = describe(cls, ctx, { objGain, exposed: exposureAt(state, side, bestHex, believed), fireTargetId, mobile, highGround }, task);
   return { unitId: unit.id, stance, intent, destination: bestHex, path, fireTargetId };
 }
 
@@ -345,7 +355,7 @@ function pickTarget(attacker: UnitInstance, hex: Hex, visible: readonly EnemyVie
 function describe(
   cls: UnitClass,
   ctx: AiContext,
-  x: { objGain: number; exposed: number; fireTargetId: number | null; mobile: boolean },
+  x: { objGain: number; exposed: number; fireTargetId: number | null; mobile: boolean; highGround: boolean },
   task?: Task,
 ): { stance: Stance; intent: string } {
   const tgtName = () => {
@@ -374,14 +384,14 @@ function describe(
   if (cls === "mech") {
     if (!x.mobile) return { stance: "immobilised", intent: x.fireTargetId !== null ? "Immobilised — holding and returning fire" : "Immobilised — stranded, awaiting recovery" };
     if (ctx.need.need >= W.needTrigger && x.objGain <= 0) return { stance: "resupply", intent: `Breaking contact to resupply (${ctx.need.reason || "sustainment"})` };
-    if (ctx.dObjFrom === 0 && x.objGain <= 0) return { stance: "hold", intent: "Holding the objective" };
-    if (x.objGain > 0) return { stance: "advance", intent: "Advancing on the objective" };
-    if (x.fireTargetId !== null) return { stance: "assault", intent: `Pressing the assault on ${tgtName()}` };
+    if (ctx.dObjFrom === 0 && x.objGain <= 0) return { stance: "hold", intent: x.highGround ? "Holding the high ground on the objective" : "Holding the objective" };
+    if (x.objGain > 0) return { stance: "advance", intent: x.highGround ? "Cresting the ridge — pressing the attack" : "Advancing on the objective" };
+    if (x.fireTargetId !== null) return { stance: "assault", intent: x.highGround ? `Overwatch from high ground — engaging ${tgtName()}` : `Pressing the assault on ${tgtName()}` };
     return { stance: "consolidate", intent: ctx.believed.length > 0 ? "Consolidating — axis too exposed" : "Holding — awaiting reconnaissance" };
   }
   switch (cls) {
     case "recon":
-      return { stance: "scout", intent: ctx.believed.length ? "Scouting — eyes on the enemy" : "Scouting the approach" };
+      return { stance: "scout", intent: x.highGround ? "Overwatching from high ground" : ctx.believed.length ? "Scouting — eyes on the enemy" : "Scouting the approach" };
     case "artillery":
       return { stance: "suppress", intent: x.fireTargetId !== null ? `Suppressing ${tgtName()}` : "In battery — awaiting a fire mission" };
     case "supply":

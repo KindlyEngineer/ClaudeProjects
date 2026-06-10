@@ -5,7 +5,7 @@ import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
 import type { Side } from "../data/types";
 import { isScouted } from "../sim/vision";
-import { buildEffectMarker, buildUnitMarker, type MarkerData } from "./models";
+import { bannerText, buildEffectMarker, buildUnitMarker, type MarkerData } from "./models";
 
 // Builds the 2.5D board from game state: a continuous heightmap terrain surface
 // (per-hex elevation, smoothed at shared corners so seams are seamless), a hex
@@ -235,7 +235,7 @@ export function buildBoard(state: GameState, opts: BoardOpts = {}): Board {
     const marker = buildUnitMarker(m.data, {
       size,
       lift: hexSurfaceY(state, m.data.hex),
-      intent: showIntent ? state.intents[u.id] : undefined,
+      intent: showIntent ? bannerText(u.callSign, state.intents[u.id]) : undefined,
       dim: opts.dim?.has(u.id) ?? false,
       ghost: m.ghost,
       selected: opts.selectedId === m.data.id,

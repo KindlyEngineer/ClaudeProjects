@@ -315,6 +315,12 @@ const ABBR: Record<UnitClass, string> = {
   supply: "S",
 };
 
+/** The mech banner text: "CALLSIGN — intent" (the named main effort speaking). */
+export function bannerText(callSign: string | undefined, intent: string | undefined): string | undefined {
+  if (!intent) return undefined;
+  return callSign ? `${callSign} — ${intent}` : intent;
+}
+
 /** Yaw that points the model's +X forward axis at the faced neighbour. */
 export function facingAngle(hex: Hex, facing: Direction, size: number): number {
   const here = hexToWorld(hex, size);

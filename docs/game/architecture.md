@@ -1,7 +1,9 @@
 # VANTAGE — Architecture & Build Plan
 
-Companion to [`../brief.md`](../brief.md) (the spec). This is the engineering
-plan: stack, module map, the v0 slice roadmap, and the verification loop.
+Companion to [`../brief.md`](../brief.md) (the founding spec) and
+[`endstate.md`](endstate.md) (the 1.0 destination + ratified decisions). This
+is the engineering build log: stack, module map, the slice roadmap, and the
+verification loop.
 
 ## Stack
 TypeScript + Three.js (2.5D WebGL) + Vite, tested with Vitest, screenshot-
@@ -248,6 +250,38 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
     suites); `npm run uitest` extended to drive the FULL mission flow through
     the real UI (End Phase → select guns → Smoke → click target → 7-hex screen
     laid, action spent) — 15 e2e checks; self-play 0 invariant violations.
+
+- **V1-ELEV — Mechanical elevation + the main effort's voice** ✅
+  The heightmap stops being decoration (the last big v1 promise), and the
+  autonomous mechs you serve get an identity.
+  - **Mechanical elevation** (`sim/elevation.ts`, tuning in `data/rules.ts`):
+    a RIDGE cresting above the eye-to-eye line breaks LOS (`heightClearsLine` in
+    `vision.hasLineOfSight`); firing DOWN a slope gains a capped to-hit bonus
+    (`heightHitBonus` in `combat.hitChance`, direct fire only — indirect arcs
+    over); CLIMBING costs extra MP (`climbCost` in `pathing` + `actions.moveUnit`,
+    descending free). Flat ground (every test map) is a no-op, so the unit suite
+    is unchanged; gentle tuning keeps rolling terrain textured without dominating.
+  - **The AI reads terrain too**: a `highGround` consideration rewards ground
+    that *overlooks the perceived enemy* (height advantage, contact-gated so it
+    never chases empty peaks), and the commander's intent gains a terrain voice
+    ("Cresting the ridge — pressing the attack", "Overwatch from high ground",
+    "Holding the high ground"). Recon reports "Overwatching from high ground".
+  - **Call signs** (`state.unitLabel` + `UnitInstance.callSign`): the main effort
+    is named, not numbered — deterministic per side (Vanguard, Saber, …), mechs
+    only. Flows through the board banner ("Vanguard — …"), the cards (name +
+    type subtitle), the combat log and the commander-needs readout. The
+    legibility/soul layer: you're enabling a named entity with agency.
+  - **Balance re-pin**: elevation favours the prepared defence (correct — Ridge
+    is attacker-disadvantaged by design), so the fixed-seed core proof moved to
+    seed 1 (clean unaided-loss / supported-win; unaided still 0/20, supported
+    14/20) and the self-play "both roles" bound relaxed to a majority. **A latent
+    bug surfaced and was fixed**: fractional fuel (from climb costs) let a
+    fractional supply budget leak a fractional round into ammo via
+    `transferSupply`, underflowing past zero — ammo now transfers whole rounds.
+  - **Verification**: 135 vitest tests (elevation LOS/hit/climb, identity/voice
+    suites); `npm run uitest` 15 e2e checks (hardened against elevation
+    projection shifts via an `aimScreen` debug helper); self-play 48 matches, 0
+    invariant violations, both roles competent.
 
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 

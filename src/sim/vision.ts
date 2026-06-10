@@ -1,5 +1,6 @@
 import type { Side } from "../data/types";
 import { sightBlockedAt } from "./effects";
+import { heightClearsLine } from "./elevation";
 import { hexDistance, hexLine, type Hex } from "./hex";
 import { effectiveVision, livingUnits, type GameState, type UnitInstance } from "./state";
 
@@ -7,20 +8,21 @@ import { effectiveVision, livingUnits, type GameState, type UnitInstance } from 
 // "no recon → blind and cautious." A side sees a hex if any living friendly unit
 // is within its (sensors-crit-adjusted) sight range AND has a clear line of
 // sight. Blocking terrain (woods/urban) and battlefield effects (smoke) break
-// the line — elevation LOS arrives in v1.
+// the line; in v1 a RIDGE cresting above the sightline blocks it too.
 
 export function blocksSight(state: GameState, h: Hex): boolean {
   return sightBlockedAt(state, h);
 }
 
-/** Clear line of sight between two hexes — intervening blocking terrain breaks
- *  it; terrain on the endpoints themselves does not. */
+/** Clear line of sight between two hexes — broken by intervening blocking
+ *  terrain/smoke OR by ground rising above the eye-to-eye line (elevation). The
+ *  endpoints themselves don't block. */
 export function hasLineOfSight(state: GameState, from: Hex, to: Hex): boolean {
   const line = hexLine(from, to);
   for (let i = 1; i < line.length - 1; i++) {
     if (blocksSight(state, line[i])) return false;
   }
-  return true;
+  return heightClearsLine(state, from, to);
 }
 
 export function canSee(state: GameState, observer: UnitInstance, target: Hex): boolean {

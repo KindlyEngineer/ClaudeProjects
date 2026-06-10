@@ -16,8 +16,9 @@ by an autonomous main effort.
 > **`docs/brief.md` is the design source of truth.** Do not deviate from its
 > locked decisions without flagging. Resolved with the owner: loss = mission
 > failure OR all mechs destroyed OR all support units lost; v0 ships an
-> interactive UI *and* a headless harness; the heightmap is **visual** in v0
-> (sim cover/exposure comes from terrain *type*), elevation turns mechanical in v1.
+> interactive UI *and* a headless harness; the heightmap was **visual** in v0
+> (sim cover/exposure from terrain *type*) and is now **mechanical** in v1
+> (`sim/elevation.ts`: ridge LOS, height to-hit, climb cost).
 
 > History: this repo previously held a 2.5D bullet-heaven also called "VANTAGE";
 > it was scrapped. Only the 2.5D + heightmap presentation and the self-
@@ -41,9 +42,10 @@ by an autonomous main effort.
     - `actions.ts` — shared action API: move / fire / resupply (UI + AI + scenarios)
     - `logistics.ts` — finite ammo/fuel, resupply, supply-line tracing + dry-out
     - `vision.ts` — per-side sight (LOS-gated); forward-observer targeting
-    - `pathing.ts` — Dijkstra reachability for the AI
+    - `pathing.ts` — Dijkstra reachability for the AI (pays climb costs)
     - `effects.ts` — battlefield effects (smoke/fortifications) + the SHARED
       ground queries (moveCostAt / coverAt / sightBlockedAt) every consumer uses
+    - `elevation.ts` — mechanical heightmap (v1): ridge LOS, height to-hit, climb cost
     - `needs.ts` — the commander's read-only requests to the player (legibility)
     - `commander.ts` — the inspectable utility AI for the mechs + intent string
     - `objective.ts` — Seize evaluation + win/loss
@@ -61,8 +63,9 @@ by an autonomous main effort.
 - `test/` — Vitest unit tests (pure logic, no GPU)
 - `tools/screenshot.ts` — Playwright board-state capture · `tools/uitest.ts` —
   end-to-end mouse-gesture test (`npm run uitest`)
-- `docs/` — `brief.md` (source of truth), `game/` (design + architecture),
-  `cloud-environment.md`
+- `docs/` — `brief.md` (founding spec, source of truth), `game/endstate.md`
+  (**the 1.0 destination + ratified decisions — check before scoping new
+  work**), `game/architecture.md` (build log), `cloud-environment.md`
 
 ## Architecture rules (from the brief)
 - **Pure-function deterministic sim, fully separate from render.** Render only
