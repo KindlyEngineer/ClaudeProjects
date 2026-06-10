@@ -5,12 +5,17 @@ import { animating } from "../render/anim";
 import { buildFacingPicker, buildHexLabels, buildHexOverlay } from "../render/overlay";
 import { Stage, disposeGroup } from "../render/stage";
 import type { Side } from "../data/types";
+import { RULES } from "../data/rules";
 import { moveUnit, attackUnit, faceUnit, resupplyUnit, fireMission, fortifyHex, canFireMission, missionArea, type MissionKind } from "../sim/actions";
 import { commandForce, decideUnit } from "../sim/ai";
 import type { GameEvent } from "../sim/events";
 import { commanderNeeds } from "../sim/needs";
+import { callReconFlight, callStrike, canCallReconFlight, canCallStrike } from "../sim/offmap";
+import { recordBattle, type OperationState } from "../sim/operation";
 import { planForce } from "../sim/plan";
-import { directionTo, hexEquals, hexKey, hexToWorld, neighbor, worldToHex, type Direction, type Hex } from "../sim/hex";
+import { saveOperation } from "./persist";
+import { buildAAR } from "./screens";
+import { directionTo, hexDistance, hexEquals, hexKey, hexToWorld, neighbor, worldToHex, type Direction, type Hex } from "../sim/hex";
 import { evaluateOutcome } from "../sim/objective";
 import { pathTo, type ReachNode } from "../sim/pathing";
 import { canMove, livingUnits, unitLabel, type GameState, type UnitInstance } from "../sim/state";
@@ -63,7 +68,11 @@ interface PendingMove {
   rotate: boolean;
 }
 
-export function startInteractive(view: View, state: GameState, opts: { selectId?: number; playerSide?: Side; stage?: boolean } = {}): void {
+export function startInteractive(
+  view: View,
+  state: GameState,
+  opts: { selectId?: number; playerSide?: Side; stage?: boolean; operation?: OperationState } = {},
+): void {
   const playerSide: Side = opts.playerSide ?? "blue";
   let selectedId: number | null = opts.selectId ?? null;
   let pendingMove: PendingMove | null = null;
@@ -71,7 +80,7 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
   let inspectHex: Hex | null = null; // clicked empty ground → terrain inspection
   let notice: string | null = null; // why the last order didn't happen
   let playing = false; // event playback in progress → input parked
-  let targeting: MissionKind | "fortify" | null = null; // a support verb awaiting a target
+  let targeting: MissionKind | "fortify" | "strike" | "airrecon" | null = null; // a verb awaiting a target
   let hoverHex: Hex | null = null; // for the mission-area preview
 
   // Opening intents so the mech banners read on turn 1 (decideUnit is pure).
@@ -99,6 +108,12 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
   // animation for the opening upkeep), everything after plays back.
   let cursor = 0;
   const logLines: string[] = [];
+  // An operation battle opens with the commander's Interlude refit report — what
+  // it took from the depot and what it still wants.
+  if (opts.operation?.refitReport.length) {
+    logLines.push(`<div class="log-turn">— Interlude refit —</div>`);
+    for (const line of opts.operation.refitReport) logLines.push(`<div class="log-line"><span class="log-us">${line}</span></div>`);
+  }
   for (; cursor < state.events.length; cursor++) appendLog(state.events[cursor]);
 
   const selectedUnit = (): UnitInstance | undefined =>
@@ -169,13 +184,21 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
       return g;
     }
     // A support verb is targeting: preview the footprint under the cursor
-    // (missions) or light the buildable hexes (fortify).
+    // (missions / air), or light the buildable hexes (fortify).
     if (targeting) {
       const sel = selectedUnit();
       if (sel && targeting === "fortify") {
         g.add(buildHexOverlay(state, fortifyTargets(state, sel), 0xd8c47a, 0.4));
-      } else if (sel && hoverHex) {
-        const ok = canFireMission(state, sel, hoverHex, targeting as MissionKind).ok;
+      } else if (targeting === "strike" && hoverHex) {
+        const ok = canCallStrike(state, playerSide, hoverHex).ok;
+        const area = state.map.cells.filter((c) => hexDistance(c.hex, hoverHex!) <= RULES.offmap.strike.radius).map((c) => c.hex);
+        g.add(buildHexOverlay(state, area, ok ? 0xff7a3a : 0x666c78, ok ? 0.45 : 0.18));
+      } else if (targeting === "airrecon" && hoverHex) {
+        const ok = canCallReconFlight(state, playerSide, hoverHex).ok;
+        const area = state.map.cells.filter((c) => hexDistance(c.hex, hoverHex!) <= RULES.offmap.reconFlight.radius).map((c) => c.hex);
+        g.add(buildHexOverlay(state, area, ok ? 0x6ab0ff : 0x666c78, ok ? 0.22 : 0.1));
+      } else if (sel && hoverHex && (targeting === "suppress" || targeting === "smoke")) {
+        const ok = canFireMission(state, sel, hoverHex, targeting).ok;
         const color = !ok ? 0x666c78 : targeting === "suppress" ? 0xff8a3a : 0xb8c2cc;
         g.add(buildHexOverlay(state, missionArea(state, hoverHex), color, ok ? 0.4 : 0.18));
       }
@@ -224,20 +247,27 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     const pressedUnitId = pickUnit();
     const clickedHex = pickHex();
 
-    // A support verb is targeting: this click designates (or rejects) the target.
-    if (targeting && sel) {
+    // A verb is targeting: this click designates (or rejects) the target. Air
+    // verbs are SIDE-level (no selected unit needed); the rest belong to `sel`.
+    if (targeting) {
       if (!clickedHex) {
         targeting = null; // clicked off-board → cancel
         refreshOverlays();
         return;
       }
-      const r = targeting === "fortify" ? fortifyHex(state, sel, clickedHex) : fireMission(state, sel, clickedHex, targeting);
-      if (r.ok) {
+      let r: { ok: boolean; reason?: string } | null = null;
+      if (targeting === "strike") r = callStrike(state, playerSide, clickedHex);
+      else if (targeting === "airrecon") r = callReconFlight(state, playerSide, clickedHex);
+      else if (sel) r = targeting === "fortify" ? fortifyHex(state, sel, clickedHex) : fireMission(state, sel, clickedHex, targeting);
+      if (r?.ok) {
         targeting = null;
         afterAction();
-      } else {
+      } else if (r) {
         notice = r.reason ?? "invalid target"; // stay in targeting; let them re-aim
         renderBar();
+      } else {
+        targeting = null; // the owning unit vanished — drop the mode
+        refreshOverlays();
       }
       return;
     }
@@ -467,6 +497,16 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
           : `${name(ev.id)} lays a smoke screen`;
     } else if (ev.kind === "build") {
       text = `${name(ev.id)} fortifies the position`;
+    } else if (ev.kind === "offmap") {
+      const chip = ev.side === playerSide ? "log-us" : "log-them";
+      const who = `<span class="${chip}">${ev.side === playerSide ? "Your air" : "Enemy air"}</span>`;
+      if (ev.asset === "strike") {
+        const kills = ev.hits.filter((h) => h.destroyed).length;
+        const dmg = ev.hits.reduce((s, h) => s + h.damage, 0);
+        text = `✈ ${who} strikes — ${ev.hits.length ? `${dmg} dmg${kills ? `, <span class="log-kill">${kills} DESTROYED</span>` : ""}` : "no effect on target"}`;
+      } else {
+        text = `👁 ${who} flies a recon pass — corridor observed`;
+      }
     } else if (ev.kind === "resupply") {
       const parts = [ev.ammo > 0 ? `+${ev.ammo} ammo` : "", ev.fuel > 0 ? `+${ev.fuel} fuel` : ""].filter(Boolean).join(", ");
       text = `${name(ev.id)} resupplies ${name(ev.targetId)} (${parts || "topped up"})`;
@@ -483,8 +523,8 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
     if (text) logLines.push(`<div class="log-line">${text}</div>`);
   }
 
-  /** Could the player's side see this event happen? (Artillery missions are
-   *  always noticed — a barrage landing is loud and luminous.) */
+  /** Could the player's side see this event happen? (Artillery missions and
+   *  air activity are always noticed — loud and luminous.) */
   function eventVisible(ev: GameEvent): boolean {
     if (ev.kind === "move" || ev.kind === "face") return stage.shownLive(ev.id);
     if (ev.kind === "resupply") return stage.shownLive(ev.id) || stage.shownLive(ev.targetId);
@@ -559,7 +599,11 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
         : targeting
           ? targeting === "fortify"
             ? "Click a highlighted hex to fortify — Esc cancels"
-            : `Click the ${targeting === "suppress" ? "suppression" : "smoke"} target hex — Esc cancels`
+            : targeting === "strike"
+              ? "Click an OBSERVED hex to put the strike on — Esc cancels"
+              : targeting === "airrecon"
+                ? "Click where the overflight should look — Esc cancels"
+                : `Click the ${targeting === "suppress" ? "suppression" : "smoke"} target hex — Esc cancels`
           : pendingMove
             ? pendingMove.rotate
               ? "Drag to turn in place — release to set the facing"
@@ -584,15 +628,19 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
           refreshOverlays();
         });
       } else {
+        const enterTargeting = (t: MissionKind | "fortify" | "strike" | "airrecon") => () => {
+          targeting = t;
+          notice = null;
+          hoverHex = null;
+          refreshOverlays();
+        };
+        // Side-level air (no unit selection needed — the budget is the limiter).
+        const air = state.offmap[playerSide];
+        if (air.strike > 0) mkBtn(`✈ Strike (${air.strike})`, "btn btn-alt", enterTargeting("strike"));
+        if (air.recon > 0) mkBtn(`👁 Overflight (${air.recon})`, "btn btn-alt", enterTargeting("airrecon"));
         // Support verbs for the selected unit (artillery missions / engineering).
         if (sel) {
           const sv = supportActions(state, sel);
-          const enterTargeting = (t: MissionKind | "fortify") => () => {
-            targeting = t;
-            notice = null;
-            hoverHex = null;
-            refreshOverlays();
-          };
           if (sv.missions) {
             mkBtn("☄ Suppress", "btn btn-alt", enterTargeting("suppress"));
             mkBtn("▒ Smoke", "btn btn-alt", enterTargeting("smoke"));
@@ -681,6 +729,19 @@ export function startInteractive(view: View, state: GameState, opts: { selectId?
       return;
     }
     if (endEl.childElementCount > 0) return; // already shown
+    // Operation battles end in the After-Action Report — the commander's word on
+    // what the player's work meant — then the result is recorded and carried.
+    if (opts.operation) {
+      const op = opts.operation;
+      endEl.appendChild(
+        buildAAR(state, op, () => {
+          recordBattle(op, state);
+          saveOperation(op);
+          location.href = `${location.pathname}?op=${op.defId}&${op.phase === "interlude" ? "interlude=1" : "battle=end"}`;
+        }),
+      );
+      return;
+    }
     const playerAttacks = state.objective.attacker === playerSide;
     const won = state.outcome === playerSide;
     const title = won ? (playerAttacks ? "OBJECTIVE SECURED" : "OBJECTIVE DEFENDED") : playerAttacks ? "EFFORT FAILED" : "OBJECTIVE LOST";

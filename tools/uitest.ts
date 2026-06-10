@@ -177,6 +177,30 @@ async function main(): Promise<number> {
     check(mission.missionEvent, "mission event recorded");
     check(mission.acted, "the mission spent the guns' action");
 
+    // ── 5. Off-map air: an overflight through the side-level targeting UI ─────
+    // (The Gap carries air budgets; the verb is side-level — no unit selected.)
+    await page.goto(`${URL}?map=gap&seed=1`, { waitUntil: "load" });
+    await page.waitForFunction(() => (window as { __vantageReady?: boolean }).__vantageReady === true, { timeout: 20000 });
+    await page.locator("#bar button", { hasText: "Overflight" }).click();
+    const deepKey = "24,0"; // deep ground nobody on blue can see
+    const deepPx: XY = await page.evaluate((k) => (window as unknown as { __vantage: { screenOf: (key: string) => XY } }).__vantage.screenOf(k), deepKey);
+    await page.mouse.move(deepPx.x, deepPx.y); // the coverage preview tracks the cursor
+    await page.mouse.click(deepPx.x, deepPx.y);
+    await page.waitForFunction(() => !(window as unknown as { __vantage: { busy: () => boolean } }).__vantage.busy(), { timeout: 30000 });
+    const air = await page.evaluate(() => {
+      const v = (window as unknown as {
+        __vantage: { state: { offmap: { blue: { recon: number } }; airRecon: unknown[]; events: Array<{ kind: string; asset?: string }> } };
+      }).__vantage;
+      return {
+        flown: v.state.events.some((e) => e.kind === "offmap" && e.asset === "recon"),
+        budget: v.state.offmap.blue.recon,
+        coverage: v.state.airRecon.length,
+      };
+    });
+    check(air.flown, "overflight event recorded");
+    check(air.budget === 0, `overflight budget spent (left ${air.budget})`);
+    check(air.coverage === 1, "air coverage active");
+
     check(errors.length === 0, `no page errors${errors.length ? `: ${errors[0]}` : ""}`);
     await browser.close();
   } finally {

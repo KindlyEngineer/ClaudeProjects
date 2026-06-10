@@ -163,8 +163,70 @@ export class Stage {
         return this.playMission(ev);
       case "build":
         return this.playBuild(ev);
+      case "offmap":
+        return this.playOffmap(ev);
       default:
         return; // turn/phase markers are log-only
+    }
+  }
+
+  /** Air activity: a fast jet streak over the target, then the payload — a
+   *  hammering of flashes (strike, with deaths resolved) or a sweeping blue
+   *  sensor ring (recon overflight). */
+  private async playOffmap(ev: Extract<GameEvent, { kind: "offmap" }>): Promise<void> {
+    const c = hexToWorld(ev.at, this.size);
+    const y = this.groundY(ev.at) + 6.5;
+    // The flyby: a slim dart crossing the footprint, west→east for blue, mirrored for red.
+    const dirSign = ev.side === "blue" ? 1 : -1;
+    const jet = new THREE.Mesh(
+      new THREE.ConeGeometry(0.16, 0.9, 6),
+      new THREE.MeshBasicMaterial({ color: ev.side === "blue" ? 0x9fc4ff : 0xffb4a8 }),
+    );
+    jet.rotation.z = -dirSign * (Math.PI / 2); // nose along the flight path
+    this.fx.add(jet);
+    const span = 16;
+    await tween(420, (t) => {
+      jet.position.set(c.x + dirSign * (t * 2 - 1) * span, y + Math.sin(t * Math.PI) * 0.6, c.z);
+    });
+    this.fx.remove(jet);
+    jet.geometry.dispose();
+    (jet.material as THREE.Material).dispose();
+
+    if (ev.asset === "strike") {
+      for (let i = 0; i < ev.hexes.length; i++) {
+        const h = ev.hexes[i];
+        const w = hexToWorld(h, this.size);
+        this.flash(new THREE.Vector3(w.x, this.groundY(h) + 0.5, w.z), 0xff8a3a, 0.42, 240);
+        if (i % 2 === 1) await delay(60);
+      }
+      await delay(160);
+      for (const hit of ev.hits) {
+        const u = this.state.units.find((x) => x.id === hit.id);
+        if (!u) continue;
+        if (hit.damage > 0) this.floatText(u.hex, `${hit.damage} dmg`, "#ffb27a");
+        if (hit.destroyed) {
+          this.floatText(u.hex, "DESTROYED", "#ff5a4a", 1.0);
+          await this.playDeath(hit.id, u.hex);
+        }
+      }
+      await delay(180);
+    } else {
+      // The sensor sweep: an expanding ring the size of the coverage.
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.3, 0.55, 32),
+        new THREE.MeshBasicMaterial({ color: 0x6ab0ff, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }),
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(c.x, this.groundY(ev.at) + 0.15, c.z);
+      this.fx.add(ring);
+      this.floatText(ev.at, "RECON OVERFLIGHT", "#9fc4ff");
+      await tween(520, (t) => {
+        ring.scale.setScalar(1 + t * 7);
+        (ring.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - t);
+      });
+      this.fx.remove(ring);
+      ring.geometry.dispose();
+      (ring.material as THREE.Material).dispose();
     }
   }
 
