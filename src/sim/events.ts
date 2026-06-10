@@ -43,7 +43,17 @@ export type GameEvent =
       hexes: Hex[]; // the saturated area
       suppressedIds: number[]; // units rattled by a suppression mission
     }
-  | { seq: number; turn: number; kind: "build"; id: number; side: Side; at: Hex; effect: string };
+  | { seq: number; turn: number; kind: "build"; id: number; side: Side; at: Hex; effect: string }
+  | {
+      seq: number;
+      turn: number;
+      kind: "offmap"; // a side-level off-map asset call (air support)
+      asset: "strike" | "recon";
+      side: Side;
+      at: Hex;
+      hexes: Hex[]; // the footprint
+      hits: Array<{ id: number; damage: number; destroyed: boolean }>; // strikes only
+    };
 
 // Omit must DISTRIBUTE over the union (plain Omit collapses it to common keys).
 type EventInput = GameEvent extends infer E ? (E extends GameEvent ? Omit<E, "seq" | "turn"> : never) : never;

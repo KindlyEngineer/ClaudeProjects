@@ -29,15 +29,26 @@ export function canSee(state: GameState, observer: UnitInstance, target: Hex): b
   return hexDistance(observer.hex, target) <= effectiveVision(observer) && hasLineOfSight(state, observer.hex, target);
 }
 
-/** Does `side` have eyes on `hex` (any friendly observer)? Used for fog/scouting. */
+/** Is `hex` inside one of `side`'s active recon-overflight footprints? (Air
+ *  coverage lasts the turn it was called; inlined here — not imported from
+ *  offmap.ts — to keep the module graph acyclic.) */
+function airCovered(state: GameState, side: Side, hex: Hex): boolean {
+  return state.airRecon.some(
+    (a) => a.side === side && a.calledTurn === state.turn && hexDistance(a.center, hex) <= a.radius,
+  );
+}
+
+/** Does `side` have eyes on `hex` — a friendly observer with line of sight, or
+ *  an active recon overflight? Gates fog, scouting and ALL fires. */
 export function isScouted(state: GameState, side: Side, hex: Hex): boolean {
+  if (airCovered(state, side, hex)) return true;
   return livingUnits(state, side).some((o) => canSee(state, o, hex));
 }
 
-/** Enemy units `side` can currently see. */
+/** Enemy units `side` can currently see (ground observers or air coverage). */
 export function visibleEnemies(state: GameState, side: Side): UnitInstance[] {
   const observers = livingUnits(state, side);
   return livingUnits(state)
     .filter((e) => e.side !== side)
-    .filter((e) => observers.some((o) => canSee(state, o, e.hex)));
+    .filter((e) => airCovered(state, side, e.hex) || observers.some((o) => canSee(state, o, e.hex)));
 }

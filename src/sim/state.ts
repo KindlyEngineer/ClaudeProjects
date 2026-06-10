@@ -53,6 +53,17 @@ export interface GameState {
   belief: { blue: Belief; red: Belief }; // fog-limited knowledge each side reasons on
   posture: { blue: PostureState; red: PostureState }; // operational posture per side
   skill: { blue: number; red: number }; // commander skill (0,1]; <1 = fallible
+  offmap: { blue: { strike: number; recon: number }; red: { strike: number; recon: number } }; // air sorties left
+  airRecon: AirReconCoverage[]; // active overflight footprints (this turn's eyes)
+}
+
+/** A recon overflight's footprint: the calling side sees (and may engage) inside
+ *  it for the remainder of the turn it was called. */
+export interface AirReconCoverage {
+  side: Side;
+  center: Hex;
+  radius: number;
+  calledTurn: number;
 }
 
 /** Every random draw is logged for the headless harness (brief §3). */
@@ -92,7 +103,7 @@ export interface PostureState {
 }
 
 // Call signs for the autonomous main effort (assigned in placement order).
-const CALL_SIGNS = ["Vanguard", "Saber", "Reaper", "Warden", "Talon", "Ronin", "Halberd", "Cobra"] as const;
+export const CALL_SIGNS = ["Vanguard", "Saber", "Reaper", "Warden", "Talon", "Ronin", "Halberd", "Cobra"] as const;
 
 /** Display name: a mech's call sign (the entity you serve), else its type name. */
 export function unitLabel(u: UnitInstance): string {
@@ -157,6 +168,11 @@ export function createGame(map: MapDef, seed: number): GameState {
       red: { kind: "hold", since: 1, targetId: null },
     },
     skill: { blue: map.commanderSkill?.blue ?? 1, red: map.commanderSkill?.red ?? 1 },
+    offmap: {
+      blue: { strike: map.offmap?.blue?.strike ?? 0, recon: map.offmap?.blue?.recon ?? 0 },
+      red: { strike: map.offmap?.red?.strike ?? 0, recon: map.offmap?.red?.recon ?? 0 },
+    },
+    airRecon: [],
   };
 }
 

@@ -6,7 +6,7 @@ import { decideUnit } from "../src/sim/ai";
 import { planForce } from "../src/sim/plan";
 import { beginTurn } from "../src/sim/turn";
 import { unitType } from "../src/data/units";
-import { hexKey, type Hex } from "../src/sim/hex";
+import { hexKey } from "../src/sim/hex";
 import { MAP01 } from "../src/data/maps/map01";
 import { openGame, place, find, axial } from "./helpers";
 
