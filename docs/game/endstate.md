@@ -169,6 +169,8 @@ commander needs · mechanical elevation · call signs + terrain voice.
 | D8 | Map scale | **Maps grow** as unit-type count and battlefield complexity grow — started with The Gap (36×22); the M2 scenario set continues the trend. |
 
 ---
-*Maintained as decisions land. M1 (Operation spine) shipped: carry-over,
-Interlude, AAR, saves, off-map air, menu/shell, MAP03. Next checkpoint: M2
-scoping (scenario set, defender seat, mines, skirmish generator).*
+*Maintained as decisions land. M1 shipped (carry-over, Interlude, AAR, saves,
+off-map air, shell, MAP03) and UI-4 (tactical design language). M2 in
+progress: mines ✓, defender seat ✓ (Watchline), Causeway ✓, shared generator
++ seeded random skirmish ✓ — remaining: 2–3 more scenarios, escort/withdrawal
+variants, force-picker presets. Next checkpoint: M2 completion review.*

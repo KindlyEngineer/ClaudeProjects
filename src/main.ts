@@ -18,6 +18,9 @@ import { renderInterlude, renderMenu, renderOperationEnd } from "./ui/screens";
 import { MAP01, MAP01_BREAKTHROUGH } from "./data/maps/map01";
 import { MAP02 } from "./data/maps/map02";
 import { MAP03 } from "./data/maps/map03";
+import { MAP04 } from "./data/maps/map04";
+import { MAP05 } from "./data/maps/map05";
+import { randomSkirmishMap } from "./data/maps/gen";
 
 // Boot router (M1). Routes by URL so every page loads deterministically:
 //   (no params)            → the title menu
@@ -86,7 +89,19 @@ function bootBattle(op: OperationState | null): void {
   } else {
     const mapParam = params.get("map");
     const map =
-      mapParam === "breakthrough" ? MAP01_BREAKTHROUGH : mapParam === "steppe" ? MAP02 : mapParam === "gap" ? MAP03 : MAP01;
+      mapParam === "breakthrough"
+        ? MAP01_BREAKTHROUGH
+        : mapParam === "steppe"
+          ? MAP02
+          : mapParam === "gap"
+            ? MAP03
+            : mapParam === "watchline"
+              ? MAP04
+              : mapParam === "causeway"
+                ? MAP05
+                : mapParam === "random"
+                  ? randomSkirmishMap(seed)
+                  : MAP01;
     state = createGame(map, seed);
   }
 

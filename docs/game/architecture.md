@@ -330,6 +330,23 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
   Emoji → uppercase labels. 147 tests + 18 e2e unchanged-green; restyled
   screenshots under `docs/shots/ui4-*`.
 
+- **M2 (part 1) — Mines, the defender's seat, the scenario engine** ✅
+  - **Minefields** (`RULES.mines`, effects substrate + `actions`): engineer-laid,
+    owner-safe, single-use. Detonation interrupts the move on the struck hex
+    (side-armour penetration, 50% mobility kill); pathing routes around KNOWN
+    fields only (fog-honest); MINE/BREACH targeting verbs; AI doctrine — the
+    defending engineer mines the approach once dug in, the attacker breaches.
+  - **Watchline (MAP04)** — the first DEFENSE (D2): red assaults with air, blue
+    holds a crossroads. Unaided the defence falls ~⅔ of the time — the player's
+    engineering and fires are the difference, mirroring the core proof.
+  - **Causeway (MAP05)** — the smoke lesson: two narrow crossings under far-bank
+    overwatch (river valley shaped via the generator's `shape` hook).
+  - **Shared generator + random skirmish** (`data/maps/gen.ts`): the fBm core
+    parametrised (shape/terrain hooks); `randomSkirmishMap(seed)` — fresh
+    deterministic boards, canonical forces, seed-varied objective; on the menu.
+  - Self-play sweeps SEVEN scenarios (0 invariant violations); 155 vitest tests
+    (mines + scenario-soundness suites); 18 e2e checks green.
+
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 
 Per the owner: the AI must (a) never behave tactically/logically unsoundly for
