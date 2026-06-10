@@ -108,4 +108,48 @@ export interface MapDef {
   /** Commander skill per side in (0,1] — 1 = near-flawless, lower = more
    *  fallible (a designer-set difficulty). Defaults to 1 if omitted. */
   readonly commanderSkill?: { readonly blue?: number; readonly red?: number };
+  /** Off-map asset budget per side for this battle (defaults to none). The
+   *  operation Interlude may top these up from the stockpile. */
+  readonly offmap?: { readonly blue?: OffMapBudget; readonly red?: OffMapBudget };
+}
+
+/** Side-level off-map calls available in a battle (air support, M1). */
+export interface OffMapBudget {
+  readonly strike?: number;
+  readonly recon?: number;
+}
+
+// ── Operations (the linked campaign, M1) ────────────────────────────────────
+
+/** One battle in an operation: the scenario plus what completing it awards. */
+export interface OperationBattleDef {
+  readonly mapId: string; // resolved via data/maps registry
+  readonly title: string;
+  readonly briefing: string;
+  /** Stockpile award on completion; winning earns `win`, losing only `loss`
+   *  (failure-forward: defeats are carried, not retried). */
+  readonly award: { readonly win: Partial<Stockpile>; readonly loss: Partial<Stockpile> };
+}
+
+/** The operation's finite resource pool the player allocates in the Interlude.
+ *  Whatever the player does NOT spend on their own echelon is the depot the
+ *  commander draws on to refit its mechs — provision, never task. */
+export interface Stockpile {
+  readonly ammo: number; // rounds
+  readonly fuel: number; // movement-point fuel
+  readonly repair: number; // structure points (also clears crits, at a cost)
+  readonly strikes: number; // air strike sorties (assignable per battle)
+  readonly recon: number; // overflight sorties
+  readonly credits: number; // requisitions: replacement vehicles / a NEW mech
+}
+
+export interface OperationDef {
+  readonly id: string;
+  readonly name: string;
+  readonly blurb: string;
+  readonly battles: readonly OperationBattleDef[];
+  readonly initialStockpile: Stockpile;
+  /** Requisition prices (credits). A mech requisition fields a fully NEW named
+   *  entity — new call sign, commander-chosen chassis — never a resurrection. */
+  readonly prices: { readonly mech: number; readonly support: Readonly<Record<string, number>> };
 }

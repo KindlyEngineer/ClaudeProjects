@@ -3,10 +3,12 @@ import { RULES } from "../data/rules";
 import type { Side, UnitClass } from "../data/types";
 import { unitType } from "../data/units";
 import { attackUnit, canAttack, canFireMission, canFortify, fireMission, fortifyHex, moveUnit, resupplyUnit } from "./actions";
+import { assess } from "./assess";
 import { coverAt } from "./effects";
 import { armorArc, hexDistance, hexKey, type Hex } from "./hex";
 import { believedEnemies, visibleSightings } from "./knowledge";
 import { needsSupply as supplyDeficit, supplySources } from "./logistics";
+import { callReconFlight, callStrike } from "./offmap";
 import { pathTo, reachable } from "./pathing";
 import { canMove, elevationAt, livingUnits, type GameState, type UnitInstance } from "./state";
 import { isEligible } from "./turn";
@@ -493,9 +495,59 @@ function doResupply(state: GameState, unit: UnitInstance): void {
   if (adj[0]) resupplyUnit(state, unit, adj[0]);
 }
 
+/** Air doctrine — the same information-gated rules as everything else. STRIKE a
+ *  visible cluster of 2+ (a sortie is too precious for one mark); when BLIND
+ *  (approach unscouted) and holding an overflight, buy a turn of eyes over the
+ *  axis. At most one call per phase; budgets cap the rest. AI-controlled forces
+ *  only — a player-led side calls its own air. */
+function maybeCallAir(state: GameState, side: Side): void {
+  // Only command the air when the side's force is AI-run.
+  if (!livingUnits(state, side).some((u) => u.controller === "ai")) return;
+
+  if (state.offmap[side].strike > 0) {
+    const visible = visibleSightings(state, side);
+    if (visible.length >= 2) {
+      const cands = [...visible].sort((a, b) => (hexKey(a.hex) < hexKey(b.hex) ? -1 : 1));
+      let best: Hex | null = null;
+      let bestN = 1;
+      for (const s of cands) {
+        const n = visible.filter((o) => hexDistance(o.hex, s.hex) <= RULES.offmap.strike.radius).length;
+        if (n > bestN) {
+          bestN = n;
+          best = s.hex;
+        }
+      }
+      if (best && callStrike(state, side, best).ok) return;
+    }
+  }
+
+  if (state.offmap[side].recon > 0 && state.airRecon.every((a) => a.side !== side || a.calledTurn !== state.turn)) {
+    const a = assess(state, side);
+    if (!a.haveContact || a.scouted < RULES.commander.minScoutToCommit) {
+      // Eyes where the answers are: the believed enemy's centre, else the axis.
+      const believed = believedEnemies(state, side);
+      let target: Hex;
+      if (believed.length) {
+        target = {
+          q: Math.round(believed.reduce((s, e) => s + e.hex.q, 0) / believed.length),
+          r: Math.round(believed.reduce((s, e) => s + e.hex.r, 0) / believed.length),
+        };
+      } else {
+        const zone = state.objective.zone;
+        target = {
+          q: Math.round(zone.reduce((s, h) => s + h.q, 0) / Math.max(1, zone.length)),
+          r: Math.round(zone.reduce((s, h) => s + h.r, 0) / Math.max(1, zone.length)),
+        };
+      }
+      callReconFlight(state, side, target);
+    }
+  }
+}
+
 /** Decide + execute every eligible AI-controlled unit of a side, under a
  *  seeded force plan (varied, deterministic positioning + posture). */
 export function commandForce(state: GameState, side: Side): void {
+  maybeCallAir(state, side); // side-level assets weigh in before the units act
   const plan = planForce(state, side);
   for (const unit of livingUnits(state, side)) {
     if (unit.controller !== "ai" || !isEligible(state, unit)) continue;

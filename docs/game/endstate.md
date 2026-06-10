@@ -159,5 +159,16 @@ commander needs · mechanical elevation · call signs + terrain voice.
 | D3 | Commander character | **Temperament presets** — per-call-sign utility-weight + voice presets; commanders play and talk differently. |
 | D4 | Weather/time-of-day | **In for 1.0**, scoped to two conditions: rain and night, as effect rows. |
 
+### M1 scope rulings (owner, 2026-06-11)
+
+| # | Question | Ruling |
+|---|----------|--------|
+| D5 | Off-map assets | **Strike + recon overflight**, both sides, in M1. **No off-map artillery** — tube artillery stays an on-board unit by design. Strikes obey the forward-observer rule; overflights buy a turn of eyes (and are themselves observers). Budgets per scenario + Interlude assignment. |
+| D6 | Mech requisition | Death stays permanent; a requisition fields a **fully differentiated NEW entity** — new call sign (never reissued), commander-chosen chassis, its own loadout. High cost. |
+| D7 | Defeat & saves | Failure-forward confirmed, **with checkpoint saves**: auto-save at every Interlude and battle end (localStorage); resume from the menu. |
+| D8 | Map scale | **Maps grow** as unit-type count and battlefield complexity grow — started with The Gap (36×22); the M2 scenario set continues the trend. |
+
 ---
-*Maintained as decisions land. Next planning checkpoint: end of M1.*
+*Maintained as decisions land. M1 (Operation spine) shipped: carry-over,
+Interlude, AAR, saves, off-map air, menu/shell, MAP03. Next checkpoint: M2
+scoping (scenario set, defender seat, mines, skirmish generator).*

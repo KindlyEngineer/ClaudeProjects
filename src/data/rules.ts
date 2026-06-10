@@ -40,6 +40,22 @@ export const RULES = {
     radius: 1, // target hex + its ring
   },
 
+  // Off-map assets (M1): side-level air support, budgeted per battle (scenario
+  // allocation + operation Interlude top-ups). Strikes need an OBSERVED target
+  // (forward-observer rule); overflights buy a turn of eyes over a corridor.
+  offmap: {
+    strike: {
+      radius: 1, // footprint: target + ring
+      accuracy: 0.7, // per-unit to-hit in the footprint
+      damage: 7,
+      penetration: 7, // vs deck armour (the target's SIDE value)
+      suppression: 4, // applied to every enemy in the footprint, hit or miss
+    },
+    reconFlight: {
+      radius: 4, // a corridor's worth of coverage
+    },
+  },
+
   // Mech commander utility AI (the player's influence surface). Thresholds below
   // which a mech needs to break contact; weights for scoring candidate moves.
   commander: {

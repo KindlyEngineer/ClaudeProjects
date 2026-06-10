@@ -283,6 +283,41 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
     projection shifts via an `aimScreen` debug helper); self-play 48 matches, 0
     invariant violations, both roles competent.
 
+- **M1 — The Operation (campaign spine) + off-map air** ✅
+  The endstate's first milestone (see `endstate.md` §6, rulings D1/D5–D8).
+  - **Off-map air assets** (`sim/offmap.ts`, D5): side-level STRIKE (kinetic,
+    forward-observer-gated, deck-armour penetration, footprint suppression) and
+    RECON OVERFLIGHT (a turn of eyes over a corridor — `isScouted`/
+    `visibleEnemies` honour active coverage, so flights legalise deep artillery
+    and follow-on strikes; sightings inject immediately). Budgets per scenario
+    (`MapDef.offmap`) + Interlude assignment. AI doctrine (`maybeCallAir`):
+    strike a visible cluster of 2+, buy eyes when blind. Tube artillery stays
+    on-board by ruling.
+  - **The operation layer** (`sim/operation.ts`, pure + JSON-round-trip): FULL
+    carry-over roster; the staging + between-battle **Interlude** (the player
+    provisions ONLY their own echelon — `spendOnSupport` refuses mechs; the
+    commander refits its mechs from the remaining depot via `commanderRefit`,
+    with a legible report + REQUESTs that opens the next battle's log);
+    permanent mech death + differentiated requisitions (`requisitionMech`: new
+    call sign, commander-picked chassis, D6); support replacement at cost;
+    failure-forward defeat (D7) — non-final losses carry, losing all mechs or
+    the finale fails the operation; checkpoint saves (`ui/persist.ts`,
+    localStorage, auto at Interlude + battle end).
+  - **The shell** (`ui/screens.ts` + boot router in `main.ts`): title menu
+    (new/resume/skirmishes), the Interlude screen, the **After-Action Report**
+    (player contributions pulled from the event stream + the commander's word
+    on what they meant — the relationship's payoff screen), operation-end
+    summary. URL-routed; every harness param untouched; `?opdemo` renders a
+    mid-operation Interlude for screenshots.
+  - **MAP03 "The Gap"** (36×22, D8 — maps grow): a breakthrough finale through
+    a defile between high ridgelines, deep layered defence, both sides holding
+    air. In the self-play sweep (4 scenarios, 0 invariant violations); brutally
+    defender-favoured all-AI (≈6%) — an operation finale is supposed to need
+    everything the player has banked.
+  - **Verification**: 147 vitest tests (offmap + operation suites); `npm run
+    uitest` 18 e2e checks (side-level overflight through the real targeting
+    UI); menu/Interlude/Gap screenshots under `docs/shots/`.
+
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 
 Per the owner: the AI must (a) never behave tactically/logically unsoundly for

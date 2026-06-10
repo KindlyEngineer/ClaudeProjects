@@ -47,19 +47,27 @@ by an autonomous main effort.
       ground queries (moveCostAt / coverAt / sightBlockedAt) every consumer uses
     - `elevation.ts` — mechanical heightmap (v1): ridge LOS, height to-hit, climb cost
     - `needs.ts` — the commander's read-only requests to the player (legibility)
+    - `offmap.ts` — side-level air assets: strike (observer-gated) + recon overflight
+    - `operation.ts` — the campaign layer: full carry-over roster, the Interlude
+      (player provisions the echelon; the commander refits its mechs from the
+      depot), requisitions, failure-forward defeat. Pure + JSON-serializable.
     - `commander.ts` — the inspectable utility AI for the mechs + intent string
     - `objective.ts` — Seize evaluation + win/loss
     - `match.ts` — headless match runner + support policies (self-play seam)
     - `aiutil.ts` — shared scripted-unit helpers · `demo.ts` — capture skirmish
   - `data/` — all content as data tables: `types.ts` (schemas), `terrain.ts`,
-    `units.ts`, `maps/` (handcrafted maps). Add a row to add content.
+    `units.ts`, `maps/` (handcrafted), `operations.ts` (campaign defs + map
+    registry). Add a row to add content.
   - `render/` — reads sim state only: `view.ts` (scene/camera), `board.ts`
     (heightmap terrain + hex grid + facing-aware unit markers + fog `viewSide`),
     `overlay.ts` (range/target/facing-rosette/hit% overlays)
   - `ui/` — interactive layer: `control.ts` (pure, tested selection/command rules
     + fog-gated selection/inspection), `interactive.ts` (DOM/Three shell:
-    BattleTech-style press-drag-release move + facing, cards, inspect panel)
-  - `main.ts` — boot
+    BattleTech-style press-drag-release move + facing, cards, inspect panel),
+    `screens.ts` (menu / Interlude / AAR / operation end), `persist.ts`
+    (checkpoint saves)
+  - `main.ts` — the boot ROUTER: menu (default) / Interlude / operation battles
+    / skirmish + the headless verification routes
 - `test/` — Vitest unit tests (pure logic, no GPU)
 - `tools/screenshot.ts` — Playwright board-state capture · `tools/uitest.ts` —
   end-to-end mouse-gesture test (`npm run uitest`)
