@@ -1,7 +1,8 @@
 import { RULES } from "../data/rules";
 import { unitType } from "../data/units";
 import { resolveAttack, inRange, type AttackResult } from "./combat";
-import { addEffect, hasEffect, moveCostAt } from "./effects";
+import { rollDice } from "./dice";
+import { addEffect, hasEffect, hostileMinefieldAt, moveCostAt, removeEffect } from "./effects";
 import { climbCost } from "./elevation";
 import { emit } from "./events";
 import { transferSupply, type ResupplyResult } from "./logistics";
@@ -21,6 +22,7 @@ export interface MoveResult {
   moved: boolean;
   cost: number;
   reason?: string;
+  mineStruck?: boolean; // the move ended early on a detonation
 }
 
 function occupant(state: GameState, h: Hex, exceptId: number): UnitInstance | undefined {
@@ -59,15 +61,44 @@ export function moveUnit(state: GameState, unit: UnitInstance, path: readonly He
   if (cost > movePoints(unit)) return { moved: false, cost: 0, reason: "out of move points" };
   if (cost > unit.fuel) return { moved: false, cost: 0, reason: "out of fuel" };
 
-  const last = path[path.length - 1];
-  const from = path.length >= 2 ? path[path.length - 2] : unit.hex;
+  // Execute step-by-step: a hostile MINEFIELD on an entered hex detonates and
+  // the move ends there (cost paid only for ground actually covered).
   const start = unit.hex;
-  unit.facing = finalFacing ?? directionTo(from, last);
+  const taken: Hex[] = [];
+  let paid = 0;
+  let struck = false;
+  let damage = 0;
+  let crit = false;
+  prev = start;
+  for (const step of path) {
+    paid += moveCostAt(state, step) + climbCost(state, prev, step);
+    taken.push(step);
+    prev = step;
+    const mine = hostileMinefieldAt(state, unit.side, step);
+    if (mine) {
+      removeEffect(state, mine); // single-use — the lane is now blown open
+      struck = true;
+      const pen = RULES.mines.penetration >= unitType(unit.typeId).armor.side;
+      damage = pen ? RULES.mines.damage : 0;
+      if (pen) unit.structure = Math.max(0, unit.structure - damage);
+      if (pen && unit.structure > 0 && rollDice(state, "mine-crit", `${unit.typeId}#${unit.id}`) < RULES.mines.mobilityCritChance) {
+        crit = true;
+        if (!unit.crits.includes("mobility")) unit.crits.push("mobility");
+      }
+      break;
+    }
+  }
+
+  const last = taken[taken.length - 1];
+  const from = taken.length >= 2 ? taken[taken.length - 2] : start;
+  // A mine strike interrupts the manoeuvre — the unit faces its line of advance.
+  unit.facing = struck ? directionTo(from, last) : (finalFacing ?? directionTo(from, last));
   unit.hex = last;
-  unit.fuel -= cost;
+  unit.fuel -= paid;
   unit.movedThisTurn = true;
-  emit(state, { kind: "move", id: unit.id, side: unit.side, path: path.map((h) => ({ ...h })), from: start, facing: unit.facing });
-  return { moved: true, cost };
+  emit(state, { kind: "move", id: unit.id, side: unit.side, path: taken.map((h) => ({ ...h })), from: start, facing: unit.facing });
+  if (struck) emit(state, { kind: "mine", id: unit.id, side: unit.side, at: { ...last }, damage, crit, destroyed: unit.structure <= 0 });
+  return { moved: true, cost: paid, mineStruck: struck };
 }
 
 /** Turn in place: set facing without leaving the hex. This is the unit's
@@ -239,6 +270,50 @@ export function fireMission(state: GameState, unit: UnitInstance, target: Hex, k
 }
 
 // ── Fortification (the engineers' support verb) ───────────────────────────────
+
+
+/** May `unit` LAY a minefield on `target` right now? Own or adjacent hex,
+ *  passable, unoccupied, not already mined. */
+export function canLayMines(state: GameState, unit: UnitInstance, target: Hex): { ok: boolean; reason?: string } {
+  if (unitType(unit.typeId).cls !== "engineer") return { ok: false, reason: "not an engineer" };
+  if (!isEligible(state, unit) || unit.actedThisTurn) return { ok: false, reason: "already acted" };
+  if (hexDistance(unit.hex, target) > 1) return { ok: false, reason: "not adjacent" };
+  if (!state.cells.has(hexKey(target))) return { ok: false, reason: "off map" };
+  if (!Number.isFinite(moveCostAt(state, target))) return { ok: false, reason: "impassable ground" };
+  if (hasEffect(state, target, "minefield")) return { ok: false, reason: "already mined" };
+  if (occupant(state, target, unit.id)) return { ok: false, reason: "occupied" };
+  return { ok: true };
+}
+
+/** Lay a minefield (owner-safe; single-use against the first hostile to enter).
+ *  Consumes the main action. */
+export function layMinefield(state: GameState, unit: UnitInstance, target: Hex): { ok: boolean; reason?: string } {
+  const gate = canLayMines(state, unit, target);
+  if (!gate.ok) return gate;
+  addEffect(state, "minefield", target, unit.side);
+  unit.actedThisTurn = true;
+  emit(state, { kind: "build", id: unit.id, side: unit.side, at: { ...target }, effect: "minefield" });
+  return { ok: true };
+}
+
+/** May `unit` CLEAR the hostile minefield on `target`? Adjacent engineers only. */
+export function canClearMines(state: GameState, unit: UnitInstance, target: Hex): { ok: boolean; reason?: string } {
+  if (unitType(unit.typeId).cls !== "engineer") return { ok: false, reason: "not an engineer" };
+  if (!isEligible(state, unit) || unit.actedThisTurn) return { ok: false, reason: "already acted" };
+  if (hexDistance(unit.hex, target) > 1) return { ok: false, reason: "not adjacent" };
+  if (!hostileMinefieldAt(state, unit.side, target)) return { ok: false, reason: "no hostile minefield" };
+  return { ok: true };
+}
+
+/** Breach: remove an adjacent hostile minefield (the engineer's main action). */
+export function clearMinefield(state: GameState, unit: UnitInstance, target: Hex): { ok: boolean; reason?: string } {
+  const gate = canClearMines(state, unit, target);
+  if (!gate.ok) return gate;
+  removeEffect(state, hostileMinefieldAt(state, unit.side, target)!);
+  unit.actedThisTurn = true;
+  emit(state, { kind: "build", id: unit.id, side: unit.side, at: { ...target }, effect: "minefield-cleared" });
+  return { ok: true };
+}
 
 /** May `unit` fortify `target` right now? Own hex or an adjacent one. */
 export function canFortify(state: GameState, unit: UnitInstance, target: Hex): { ok: boolean; reason?: string } {

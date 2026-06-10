@@ -2,10 +2,10 @@ import { clamp } from "../core/math";
 import { RULES } from "../data/rules";
 import type { Side, UnitClass } from "../data/types";
 import { unitType } from "../data/units";
-import { attackUnit, canAttack, canFireMission, canFortify, fireMission, fortifyHex, moveUnit, resupplyUnit } from "./actions";
+import { attackUnit, canAttack, canClearMines, canFireMission, canFortify, canLayMines, clearMinefield, fireMission, fortifyHex, layMinefield, moveUnit, resupplyUnit } from "./actions";
 import { assess } from "./assess";
-import { coverAt } from "./effects";
-import { armorArc, hexDistance, hexKey, type Hex } from "./hex";
+import { coverAt, hostileMinefieldAt } from "./effects";
+import { armorArc, hexDistance, hexKey, neighbors, type Hex } from "./hex";
 import { believedEnemies, visibleSightings } from "./knowledge";
 import { needsSupply as supplyDeficit, supplySources } from "./logistics";
 import { callReconFlight, callStrike } from "./offmap";
@@ -487,6 +487,24 @@ function tryFortify(state: GameState, unit: UnitInstance, task?: Task): boolean 
   return fortifyHex(state, unit, unit.hex).ok;
 }
 
+/** Engineer doctrine, part two: once dug in, a DEFENDING engineer mines the
+ *  most threatening adjacent approach (toward the attacker's home edge); an
+ *  ATTACKING engineer breaches any adjacent hostile field blocking the axis. */
+function tryMineWork(state: GameState, unit: UnitInstance): boolean {
+  const defender = unit.side !== state.objective.attacker;
+  if (defender) {
+    const sign = state.objective.attacker === "blue" ? -1 : 1; // the threat bears from there
+    const cands = neighbors(unit.hex)
+      .filter((h) => canLayMines(state, unit, h).ok)
+      .sort((x, y) => sign * (x.q - y.q) || (hexKey(x) < hexKey(y) ? -1 : 1));
+    if (cands.length && layMinefield(state, unit, cands[0]).ok) return true;
+    return false;
+  }
+  const blocked = neighbors(unit.hex).find((h) => hostileMinefieldAt(state, unit.side, h) && canClearMines(state, unit, h).ok);
+  if (blocked && clearMinefield(state, unit, blocked).ok) return true;
+  return false;
+}
+
 function doResupply(state: GameState, unit: UnitInstance): void {
   // Resupply the neediest adjacent friendly (favour the spearhead — the mech).
   const adj = livingUnits(state, unit.side)
@@ -562,6 +580,7 @@ export function commandForce(state: GameState, side: Side): void {
       // Support verbs first where doctrine says so, else aimed fire.
       if (cls === "artillery" && tryFireMission(state, unit)) continue;
       if (cls === "engineer" && tryFortify(state, unit, task)) continue;
+      if (cls === "engineer" && tryMineWork(state, unit)) continue;
       doFire(state, unit, forcePriority(state, side));
     } else if (action === "resupply") doResupply(state, unit);
   }

@@ -56,6 +56,15 @@ export const RULES = {
     },
   },
 
+  // Minefields (M2): laid/cleared by engineers, owner-safe, single-use.
+  // Detonation on entry: penetration vs the victim's SIDE armour; movement
+  // stops on the struck hex. Known fields (scouted) are routed around.
+  mines: {
+    damage: 6,
+    penetration: 7,
+    mobilityCritChance: 0.5, // tracks and legs are what mines eat
+  },
+
   // Mech commander utility AI (the player's influence surface). Thresholds below
   // which a mech needs to break contact; weights for scoring candidate moves.
   commander: {

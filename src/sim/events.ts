@@ -44,6 +44,7 @@ export type GameEvent =
       suppressedIds: number[]; // units rattled by a suppression mission
     }
   | { seq: number; turn: number; kind: "build"; id: number; side: Side; at: Hex; effect: string }
+  | { seq: number; turn: number; kind: "mine"; id: number; side: Side; at: Hex; damage: number; crit: boolean; destroyed: boolean }
   | {
       seq: number;
       turn: number;

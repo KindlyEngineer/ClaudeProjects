@@ -1,8 +1,9 @@
 import { movePoints } from "./actions";
-import { moveCostAt } from "./effects";
+import { hostileMinefieldAt, moveCostAt } from "./effects";
 import { climbCost } from "./elevation";
 import { hexKey, neighbors, type Hex } from "./hex";
 import { livingUnits, type GameState, type UnitInstance } from "./state";
+import { isScouted } from "./vision";
 
 // Movement reachability — a Dijkstra over passable, unoccupied hexes within a
 // unit's move-point/fuel budget. The commander enumerates these as its candidate
@@ -22,6 +23,7 @@ function occupied(state: GameState, h: Hex, moverId: number): boolean {
  *  by hexKey, with the cheapest cost and predecessor for path reconstruction. */
 export function reachable(state: GameState, unit: UnitInstance): Map<string, ReachNode> {
   const budget = Math.min(movePoints(unit), Math.floor(unit.fuel));
+  const anyMines = state.effects.some((e) => e.kind === "minefield" && e.side !== unit.side);
   const start = unit.hex;
   const nodes = new Map<string, ReachNode>([[hexKey(start), { hex: start, cost: 0, prev: null }]]);
   const frontier: Array<{ key: string; cost: number }> = [{ key: hexKey(start), cost: 0 }];
@@ -36,6 +38,9 @@ export function reachable(state: GameState, unit: UnitInstance): Map<string, Rea
       const mc = moveCostAt(state, n) + climbCost(state, node.hex, n); // terrain + effects + the climb
       if (!Number.isFinite(mc)) continue;
       if (occupied(state, n, unit.id)) continue;
+      // Nobody KNOWINGLY walks into a minefield: hostile fields the side has
+      // eyes on are routed around (unscouted ones still detonate in moveUnit).
+      if (anyMines && hostileMinefieldAt(state, unit.side, n) && isScouted(state, unit.side, n)) continue;
       const nc = node.cost + mc;
       if (nc > budget) continue;
       const nk = hexKey(n);

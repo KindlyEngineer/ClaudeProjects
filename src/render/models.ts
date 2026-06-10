@@ -241,6 +241,23 @@ export function buildEffectMarker(kind: EffectId, seed: number): THREE.Group {
       p.position.set(x + (seed % 3) * 0.04, y, z - (seed % 2) * 0.05);
       g.add(p);
     }
+  } else if (kind === "minefield") {
+    const shell = new THREE.MeshStandardMaterial({ color: 0x3a3326, roughness: 0.9, metalness: 0.2 });
+    for (let k = 0; k < 3; k++) {
+      const a = (Math.PI * 2 * k) / 3 + (seed % 4) * 0.3;
+      const mine = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.07, 8), shell);
+      mine.position.set(Math.cos(a) * 0.3, 0.04, Math.sin(a) * 0.3);
+      mine.castShadow = true;
+      g.add(mine);
+    }
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.5, 0.54, 6),
+      new THREE.MeshBasicMaterial({ color: 0xc4734a, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.rotation.z = Math.PI / 6;
+    ring.position.y = 0.03;
+    g.add(ring);
   } else {
     const bag = new THREE.MeshStandardMaterial({ color: 0x6e5d41, roughness: 0.95, metalness: 0 });
     for (let i = 0; i < 5; i++) {

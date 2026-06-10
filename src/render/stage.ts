@@ -163,6 +163,8 @@ export class Stage {
         return this.playMission(ev);
       case "build":
         return this.playBuild(ev);
+      case "mine":
+        return this.playMine(ev);
       case "offmap":
         return this.playOffmap(ev);
       default:
@@ -248,6 +250,21 @@ export class Stage {
       }
     } else {
       this.floatText(ev.at, "SMOKE SCREEN", "#9aa3a8");
+    }
+    await delay(220);
+  }
+
+  /** A mine strike: sharp flash under the victim, the verdict overhead. */
+  private async playMine(ev: Extract<GameEvent, { kind: "mine" }>): Promise<void> {
+    const c = hexToWorld(ev.at, this.size);
+    this.flash(new THREE.Vector3(c.x, this.groundY(ev.at) + 0.35, c.z), 0xc4734a, 0.45, 260);
+    await delay(160);
+    this.floatText(ev.at, "MINE STRIKE", "#d8a03c");
+    if (ev.destroyed) {
+      this.floatText(ev.at, "DESTROYED", "#c4554a", 1.0);
+      await this.playDeath(ev.id, ev.at);
+    } else if (ev.damage > 0) {
+      this.floatText(ev.at, `${ev.damage} dmg${ev.crit ? " · MOBILITY OUT" : ""}`, "#c4734a", 0.55);
     }
     await delay(220);
   }
