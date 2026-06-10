@@ -11,6 +11,10 @@ import type { MapDef } from "../src/data/types";
 import { MAP01, MAP01_BREAKTHROUGH } from "../src/data/maps/map01";
 import { MAP02 } from "../src/data/maps/map02";
 import { MAP03 } from "../src/data/maps/map03";
+import { MAP04 } from "../src/data/maps/map04";
+import { MAP05 } from "../src/data/maps/map05";
+import { MAP06 } from "../src/data/maps/map06";
+import { randomSkirmishMap } from "../src/data/maps/gen";
 
 const N = Number(process.argv[2] ?? 100);
 
@@ -19,6 +23,11 @@ const scenarios: Array<{ name: string; map: MapDef }> = [
   { name: "Ridge — Breakthrough", map: MAP01_BREAKTHROUGH },
   { name: "Steppe — Seize", map: MAP02 },
   { name: "The Gap — Breakthrough", map: MAP03 }, // both sides holding air
+  { name: "Watchline — Defense", map: MAP04 }, // RED attacks; blue holds
+  { name: "Causeway — Crossing", map: MAP05 }, // the smoke lesson
+  { name: "Rearguard — Last Stand", map: MAP06 }, // M2.5 showcase (heavy tank, AA, mortar, ATGM)
+  { name: "Random — seed-of-seeds", map: randomSkirmishMap(42) }, // generator soundness
+  { name: "Random heavy — 42", map: randomSkirmishMap(42, "heavy") }, // the new types under AI
 ];
 
 const allAi = (map: MapDef): MapDef => ({ ...map, units: map.units.map((u) => ({ ...u, controller: "ai" as const })) });

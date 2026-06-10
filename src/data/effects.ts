@@ -5,7 +5,7 @@
 // consumer — movement, combat, vision, the AI's own scoring — accounts for
 // effects automatically. Add a row to add an effect.
 
-export type EffectId = "smoke" | "fortification";
+export type EffectId = "smoke" | "fortification" | "minefield";
 
 export interface EffectDef {
   readonly id: EffectId;
@@ -19,6 +19,9 @@ export interface EffectDef {
 export const EFFECTS: Record<EffectId, EffectDef> = {
   smoke: { id: "smoke", name: "Smoke", blocksLineOfSight: true, moveCostDelta: 0, cover: 0, duration: 2 },
   fortification: { id: "fortification", name: "Fortification", blocksLineOfSight: false, moveCostDelta: 2, cover: 2, duration: null },
+  // Mines are a TRIGGER, not a passive modifier: entering one detonates it
+  // (resolution in actions.moveUnit; numbers in RULES.mines). Owner-safe.
+  minefield: { id: "minefield", name: "Minefield", blocksLineOfSight: false, moveCostDelta: 0, cover: 0, duration: null },
 };
 
 export function effectDef(id: EffectId): EffectDef {

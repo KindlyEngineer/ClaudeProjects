@@ -1,7 +1,7 @@
 import type { Side } from "../data/types";
 import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
-import { canAttack, canFortify, missionWeaponIndex } from "../sim/actions";
+import { canAttack, canClearMines, canFortify, canLayMines, missionWeaponIndex } from "../sim/actions";
 import { hitChance } from "../sim/combat";
 import { armorArc, hexDistance, hexEquals, neighbors, type Hex } from "../sim/hex";
 import { needsSupply } from "../sim/logistics";
@@ -118,13 +118,33 @@ export function attackPreviews(state: GameState, unit: UnitInstance): AttackPrev
 
 /** Which SUPPORT VERBS this unit could use right now (drives the bar buttons —
  *  target validity is the action's own gate, checked on the click). */
-export function supportActions(state: GameState, unit: UnitInstance): { missions: boolean; fortify: boolean } {
-  if (!readyToOrder(state, unit) || unit.actedThisTurn) return { missions: false, fortify: false };
+export function supportActions(
+  state: GameState,
+  unit: UnitInstance,
+): { missions: boolean; fortify: boolean; mine: boolean; clear: boolean } {
+  if (!readyToOrder(state, unit) || unit.actedThisTurn) return { missions: false, fortify: false, mine: false, clear: false };
   const wi = missionWeaponIndex(unit);
   const missions =
     wi !== null && canFire(unit) && unit.dryTurns < RULES.dryFireTurns && unit.ammo[wi] >= RULES.mission.ammoCost;
-  const fortify = unitType(unit.typeId).cls === "engineer";
-  return { missions, fortify };
+  const engineer = unitType(unit.typeId).cls === "engineer";
+  return {
+    missions,
+    fortify: engineer,
+    mine: engineer && mineTargets(state, unit).length > 0,
+    clear: engineer && clearTargets(state, unit).length > 0,
+  };
+}
+
+/** Hexes this engineer could MINE right now (own + adjacent, lay rules). */
+export function mineTargets(state: GameState, unit: UnitInstance): Hex[] {
+  if (!readyToOrder(state, unit)) return [];
+  return [unit.hex, ...neighbors(unit.hex)].filter((h) => canLayMines(state, unit, h).ok);
+}
+
+/** Adjacent hostile minefields this engineer could BREACH right now. */
+export function clearTargets(state: GameState, unit: UnitInstance): Hex[] {
+  if (!readyToOrder(state, unit)) return [];
+  return [unit.hex, ...neighbors(unit.hex)].filter((h) => canClearMines(state, unit, h).ok);
 }
 
 /** Hexes this engineer could fortify right now (its own + adjacent). */
@@ -216,7 +236,13 @@ export interface TerrainInfo {
 }
 
 export type InspectModel =
-  | { kind: "own"; card: CardModel; suppression: number; terrain: TerrainInfo | null }
+  | {
+      kind: "own";
+      card: CardModel;
+      suppression: number;
+      terrain: TerrainInfo | null;
+      components: Array<{ name: string; lost: boolean }>; // M2.5 detail readout
+    }
   | {
       kind: "enemy"; // built from BELIEF only — never ground truth
       id: number;
@@ -261,7 +287,13 @@ function enemyInspect(state: GameState, s: Sighting): InspectModel {
 export function inspectModel(state: GameState, viewSide: Side, selectedId: number | null, hex: Hex | null): InspectModel {
   if (selectedId !== null) {
     const own = livingUnits(state, viewSide).find((u) => u.id === selectedId);
-    if (own) return { kind: "own", card: cardModel(state, own), suppression: own.suppression, terrain: terrainInfo(state, own.hex) };
+    if (own) {
+      const components = unitType(own.typeId).components.map((comp) => ({
+        name: comp.name,
+        lost: own.componentsLost.includes(comp.id),
+      }));
+      return { kind: "own", card: cardModel(state, own), suppression: own.suppression, terrain: terrainInfo(state, own.hex), components };
+    }
     const sighting = state.belief[viewSide].get(selectedId);
     if (sighting) return enemyInspect(state, sighting);
     return null; // selected something this side doesn't know — show nothing

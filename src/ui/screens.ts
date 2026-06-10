@@ -66,6 +66,11 @@ export function renderMenu(root: HTMLElement): void {
     ["Skirmish — Ridge Approach", "?map=ridge&seed=1"],
     ["Skirmish — Open Steppe", "?map=steppe&seed=1"],
     ["Skirmish — The Gap", "?map=gap&seed=1"],
+    ["Defense — Watchline", "?map=watchline&seed=1"],
+    ["Assault — Causeway", "?map=causeway&seed=1"],
+    ["Last Stand — Rearguard", "?map=rearguard&seed=1"],
+    [`Random skirmish — seed ${((Date.now() / 1000) | 0) % 100000}`, `?map=random&seed=${((Date.now() / 1000) | 0) % 100000}`],
+    [`Random skirmish (heavy) — seed ${((Date.now() / 1000) | 0) % 100000}`, `?map=random&force=heavy&seed=${((Date.now() / 1000) | 0) % 100000}`],
   ] as const) {
     box.appendChild(btn(label, "btn menu-btn menu-alt", () => nav(query)));
   }

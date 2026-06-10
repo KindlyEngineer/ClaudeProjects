@@ -22,6 +22,7 @@ export interface UnitRecord {
   ammo: number[];
   fuel: number;
   crits: string[];
+  componentsLost: string[]; // M2.5 — damage is component-deep across battles
 }
 
 export interface BattleRecord {
@@ -61,7 +62,23 @@ function fullRecord(typeId: string, callSign?: string): UnitRecord {
     ammo: t.weapons.map((w) => w.ammoMax),
     fuel: t.fuelMax,
     crits: [],
+    componentsLost: [],
   };
+}
+
+/** Recompute the derived crit states from what's still broken (shaken is
+ *  transient and never carries between battles). */
+function recomputeCrits(r: UnitRecord): void {
+  const t = unitType(r.typeId);
+  const lost = (effect: string) => t.components.some((c) => c.effect === effect && r.componentsLost.includes(c.id));
+  const crits: string[] = [];
+  if (lost("mobility")) crits.push("mobility");
+  if (lost("sensors")) crits.push("sensors");
+  const allWeapons =
+    t.weapons.length > 0 &&
+    t.weapons.every((_, wi) => t.components.some((c) => c.effect === "weapon" && c.weaponIndex === wi && r.componentsLost.includes(c.id)));
+  if (allWeapons) crits.push("weapon");
+  r.crits = crits;
 }
 
 /** Start an operation: the roster is battle 1's blue force at full strength,
@@ -123,11 +140,12 @@ export function spendOnSupport(
   r.fuel += fuel;
   op.stockpile = { ...op.stockpile, fuel: op.stockpile.fuel - fuel };
 
-  // Repairs clear crits once the hull is whole (same bench, same hours).
-  while (r.crits.length > 0 && op.stockpile.repair >= CRIT_REPAIR_COST && r.structure >= t.structure) {
-    r.crits.pop();
+  // The bench restores broken COMPONENTS once the hull is whole.
+  while (r.componentsLost.length > 0 && op.stockpile.repair >= CRIT_REPAIR_COST && r.structure >= t.structure) {
+    r.componentsLost.pop();
     op.stockpile = { ...op.stockpile, repair: op.stockpile.repair - CRIT_REPAIR_COST };
   }
+  recomputeCrits(r);
   return { ok: true };
 }
 
@@ -149,9 +167,9 @@ export function requisitionMech(op: OperationState): { ok: boolean; reason?: str
   const sign = CALL_SIGNS.find((c) => !op.usedCallSigns.includes(c));
   if (!sign) return { ok: false, reason: "no call signs left" };
   const living = op.roster.filter((r) => r.alive && unitType(r.typeId).cls === "mech");
-  const assaults = living.filter((r) => r.typeId === "mech_assault").length;
-  const scouts = living.filter((r) => r.typeId === "mech_scout").length;
-  const typeId = assaults <= scouts ? "mech_assault" : "mech_scout"; // fill the gap
+  const pool = ["mech_assault", "mech_scout", "mech_fire"]; // the commander's yard
+  const counts = pool.map((id) => living.filter((r) => r.typeId === id).length);
+  const typeId = pool[counts.indexOf(Math.min(...counts))]; // fill the thinnest role
   op.roster.push(fullRecord(typeId, sign));
   op.usedCallSigns.push(sign);
   op.stockpile = { ...op.stockpile, credits: op.stockpile.credits - def.prices.mech };
@@ -191,12 +209,17 @@ export function commanderRefit(op: OperationState): string[] {
     }
     if (m.structure < t.structure) lines.push(`REQUEST: ${t.structure - m.structure} more repair`);
 
-    while (m.crits.length > 0 && op.stockpile.repair >= CRIT_REPAIR_COST) {
-      const crit = m.crits.pop()!;
+    while (m.componentsLost.length > 0 && op.stockpile.repair >= CRIT_REPAIR_COST) {
+      const compId = m.componentsLost.pop()!;
+      const comp = t.components.find((c) => c.id === compId);
       op.stockpile = { ...op.stockpile, repair: op.stockpile.repair - CRIT_REPAIR_COST };
-      lines.push(`${crit} system restored`);
+      lines.push(`${comp?.name ?? compId} restored`);
     }
-    if (m.crits.length > 0) lines.push(`REQUEST: repair for ${m.crits.join(", ")}`);
+    recomputeCrits(m);
+    if (m.componentsLost.length > 0) {
+      const names = m.componentsLost.map((id) => t.components.find((c) => c.id === id)?.name ?? id);
+      lines.push(`REQUEST: repair for ${names.join(", ")}`);
+    }
 
     let rounds = 0;
     for (let i = 0; i < m.ammo.length; i++) {
@@ -288,6 +311,7 @@ export function prepareBattle(op: OperationState): GameState {
     u.ammo = [...r.ammo];
     u.fuel = r.fuel;
     u.crits = [...r.crits];
+    u.componentsLost = [...r.componentsLost];
     if (r.callSign) u.callSign = r.callSign;
     u.userRosterIndex = idx;
   }
@@ -310,7 +334,8 @@ export function recordBattle(op: OperationState, state: GameState): void {
     r.structure = u.structure;
     r.ammo = [...u.ammo];
     r.fuel = u.fuel;
-    r.crits = [...u.crits];
+    r.componentsLost = [...u.componentsLost];
+    recomputeCrits(r); // shaken doesn't follow you home
     if (!r.alive && r.callSign) mechsLost.push(r.callSign);
   }
 

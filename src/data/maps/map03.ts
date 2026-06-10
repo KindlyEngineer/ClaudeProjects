@@ -116,6 +116,7 @@ const units: UnitPlacement[] = [
   place("engineer", "red", 26, 11, W),
   place("armor", "red", 28, 10, W),
   place("mech_assault", "red", 29, 12, W),
+  place("aa_vehicle", "red", 30, 10, W), // contests blue's air over the gap (M2.5)
   place("artillery", "red", 32, 11, W),
   place("supply", "red", 33, 12, W),
 ];

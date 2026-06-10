@@ -6,7 +6,7 @@ import { buildFacingPicker, buildHexLabels, buildHexOverlay } from "../render/ov
 import { Stage, disposeGroup } from "../render/stage";
 import type { Side } from "../data/types";
 import { RULES } from "../data/rules";
-import { moveUnit, attackUnit, faceUnit, resupplyUnit, fireMission, fortifyHex, canFireMission, missionArea, type MissionKind } from "../sim/actions";
+import { moveUnit, attackUnit, faceUnit, resupplyUnit, fireMission, fortifyHex, layMinefield, clearMinefield, canFireMission, missionArea, type MissionKind } from "../sim/actions";
 import { commandForce, decideUnit } from "../sim/ai";
 import type { GameEvent } from "../sim/events";
 import { commanderNeeds } from "../sim/needs";
@@ -26,6 +26,8 @@ import {
   canReserve,
   forceCards,
   fortifyTargets,
+  mineTargets,
+  clearTargets,
   inspectModel,
   moveOptions,
   readyToOrder,
@@ -80,7 +82,7 @@ export function startInteractive(
   let inspectHex: Hex | null = null; // clicked empty ground → terrain inspection
   let notice: string | null = null; // why the last order didn't happen
   let playing = false; // event playback in progress → input parked
-  let targeting: MissionKind | "fortify" | "strike" | "airrecon" | null = null; // a verb awaiting a target
+  let targeting: MissionKind | "fortify" | "mine" | "clearmines" | "strike" | "airrecon" | null = null; // a verb awaiting a target
   let hoverHex: Hex | null = null; // for the mission-area preview
 
   // Opening intents so the mech banners read on turn 1 (decideUnit is pure).
@@ -189,6 +191,10 @@ export function startInteractive(
       const sel = selectedUnit();
       if (sel && targeting === "fortify") {
         g.add(buildHexOverlay(state, fortifyTargets(state, sel), 0xd8a03c, 0.4));
+      } else if (sel && targeting === "mine") {
+        g.add(buildHexOverlay(state, mineTargets(state, sel), 0xc4734a, 0.4));
+      } else if (sel && targeting === "clearmines") {
+        g.add(buildHexOverlay(state, clearTargets(state, sel), 0x8eb07a, 0.45));
       } else if (targeting === "strike" && hoverHex) {
         const ok = canCallStrike(state, playerSide, hoverHex).ok;
         const area = state.map.cells.filter((c) => hexDistance(c.hex, hoverHex!) <= RULES.offmap.strike.radius).map((c) => c.hex);
@@ -258,7 +264,10 @@ export function startInteractive(
       let r: { ok: boolean; reason?: string } | null = null;
       if (targeting === "strike") r = callStrike(state, playerSide, clickedHex);
       else if (targeting === "airrecon") r = callReconFlight(state, playerSide, clickedHex);
-      else if (sel) r = targeting === "fortify" ? fortifyHex(state, sel, clickedHex) : fireMission(state, sel, clickedHex, targeting);
+      else if (sel && targeting === "fortify") r = fortifyHex(state, sel, clickedHex);
+      else if (sel && targeting === "mine") r = layMinefield(state, sel, clickedHex);
+      else if (sel && targeting === "clearmines") r = clearMinefield(state, sel, clickedHex);
+      else if (sel && (targeting === "suppress" || targeting === "smoke")) r = fireMission(state, sel, clickedHex, targeting);
       if (r?.ok) {
         targeting = null;
         afterAction();
@@ -496,14 +505,23 @@ export function startInteractive(
           ? `${name(ev.id)} fires a suppression mission — <span class="log-pen">${ev.suppressedIds.length} unit${ev.suppressedIds.length === 1 ? "" : "s"} suppressed</span>`
           : `${name(ev.id)} lays a smoke screen`;
     } else if (ev.kind === "build") {
-      text = `${name(ev.id)} fortifies the position`;
+      text =
+        ev.effect === "minefield"
+          ? `${name(ev.id)} lays a minefield`
+          : ev.effect === "minefield-cleared"
+            ? `${name(ev.id)} breaches the minefield`
+            : `${name(ev.id)} fortifies the position`;
+    } else if (ev.kind === "mine") {
+      text = `${name(ev.id)} strikes a mine — ${ev.destroyed ? '<span class="log-kill">DESTROYED</span>' : `<span class="log-pen">${ev.damage} dmg${ev.crit ? " · mobility out" : ""}</span>`}`;
     } else if (ev.kind === "offmap") {
       const chip = ev.side === playerSide ? "log-us" : "log-them";
       const who = `<span class="${chip}">${ev.side === playerSide ? "Your air" : "Enemy air"}</span>`;
       if (ev.asset === "strike") {
         const kills = ev.hits.filter((h) => h.destroyed).length;
         const dmg = ev.hits.reduce((s, h) => s + h.damage, 0);
-        text = `${who} strikes — ${ev.hits.length ? `${dmg} dmg${kills ? `, <span class="log-kill">${kills} DESTROYED</span>` : ""}` : "no effect on target"}`;
+        text = ev.intercepted
+          ? `${who} strike <span class="log-pen">INTERCEPTED</span> — air defence drove it off`
+          : `${who} strikes — ${ev.hits.length ? `${dmg} dmg${kills ? `, <span class="log-kill">${kills} DESTROYED</span>` : ""}` : "no effect on target"}`;
       } else {
         text = `${who} flies a recon pass — corridor observed`;
       }
@@ -530,6 +548,7 @@ export function startInteractive(
     if (ev.kind === "resupply") return stage.shownLive(ev.id) || stage.shownLive(ev.targetId);
     if (ev.kind === "fire") return stage.shownLive(ev.id) || stage.shownLive(ev.targetId);
     if (ev.kind === "build") return stage.shownLive(ev.id);
+    if (ev.kind === "mine") return stage.shownLive(ev.id) || state.units.find((u) => u.id === ev.id)?.side === playerSide;
     return true;
   }
 
@@ -599,6 +618,10 @@ export function startInteractive(
         : targeting
           ? targeting === "fortify"
             ? "Click a highlighted hex to fortify — Esc cancels"
+            : targeting === "mine"
+              ? "Click a highlighted hex to lay the minefield — Esc cancels"
+              : targeting === "clearmines"
+                ? "Click the hostile field to breach — Esc cancels"
             : targeting === "strike"
               ? "Click an OBSERVED hex to put the strike on — Esc cancels"
               : targeting === "airrecon"
@@ -628,7 +651,7 @@ export function startInteractive(
           refreshOverlays();
         });
       } else {
-        const enterTargeting = (t: MissionKind | "fortify" | "strike" | "airrecon") => () => {
+        const enterTargeting = (t: MissionKind | "fortify" | "mine" | "clearmines" | "strike" | "airrecon") => () => {
           targeting = t;
           notice = null;
           hoverHex = null;
@@ -646,6 +669,8 @@ export function startInteractive(
             mkBtn("Smoke", "btn btn-alt", enterTargeting("smoke"));
           }
           if (sv.fortify) mkBtn("Fortify", "btn btn-alt", enterTargeting("fortify"));
+          if (sv.mine) mkBtn("Mine", "btn btn-alt", enterTargeting("mine"));
+          if (sv.clear) mkBtn("Breach", "btn btn-alt", enterTargeting("clearmines"));
           if (canReserve(state, sel)) {
             mkBtn("Reserve", "btn btn-alt", () => {
               sel.reserved = true;
@@ -682,6 +707,7 @@ export function startInteractive(
         bar("AMMO", c.ammoFrac, "#d8a03c") +
         (c.suppressionFrac > 0 ? bar("SUP", c.suppressionFrac, "#c4734a") : "") +
         (status ? `<div class="status">${status}</div>` : "") +
+        `<div class="comps">${m.components.map((x) => `<span class="${x.lost ? "comp-lost" : "comp-ok"}">${x.name}</span>`).join(" · ")}</div>` +
         (m.terrain ? `<div class="terrain">${terrainLine(m.terrain)}</div>` : "");
     } else if (m.kind === "enemy") {
       const fresh = m.live ? `<span class="live">IN SIGHT</span>` : `<span class="stale">last seen T${m.lastSeenTurn}</span>`;
