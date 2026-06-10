@@ -194,6 +194,12 @@ export class Stage {
     jet.geometry.dispose();
     (jet.material as THREE.Material).dispose();
 
+    if (ev.asset === "strike" && ev.intercepted) {
+      this.flash(new THREE.Vector3(c.x, y - 1.5, c.z), 0xc4554a, 0.3, 300); // flak burst
+      this.floatText(ev.at, "INTERCEPTED", "#c4554a", 1.2);
+      await delay(300);
+      return;
+    }
     if (ev.asset === "strike") {
       for (let i = 0; i < ev.hexes.length; i++) {
         const h = ev.hexes[i];

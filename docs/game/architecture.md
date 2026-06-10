@@ -347,6 +347,33 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
   - Self-play sweeps SEVEN scenarios (0 invariant violations); 155 vitest tests
     (mines + scenario-soundness suites); 18 e2e checks green.
 
+- **M2 (final) + M2.5 — Rearguard, presets, COMPONENTS + unit variety** ✅
+  *(Owner pivot: deepen unit detail and variety before M3.)*
+  - **Component damage (M2.5)**: every unit declares a component table
+    (`ComponentDef`, data); crits now break a NAMED part via uniform seeded
+    allocation — a weapon hit disables THAT mount (`weaponDisabled` gates
+    canAttack/missions; the generic "weapon" crit lands only when every mount
+    is gone), mobility/sensors map to the shared states, a crew hit shocks the
+    crew. Damage is component-deep across the operation: carried in the roster,
+    repaired BY NAME in the Interlude ("Autocannon mount restored"), requested
+    by name when the depot runs short. Inspect panel lists components
+    (struck-through when lost). `data/crits.ts` retired from resolution.
+  - **Six new unit types** (rows + procedural model variants): Fire-Support
+    Mech (indirect LRMs — and the requisition pool now spans three chassis),
+    Heavy Tank, **SP Anti-Air** (new `aa` class: an umbrella that rolls to
+    DRIVE OFF hostile strikes — sortie spent, flak-burst INTERCEPTED playback;
+    the counter to the air game), Mortar Team (cheap forward indirect, fires
+    missions), ATGM Team (long-arm overwatch denial), Heavy Hauler.
+  - **MAP06 "Rearguard"** — the withdrawal lesson and M2.5 showcase: a thin
+    blue detachment (scout mech, mortar, ATGM, engineers) holds 12 turns
+    against heavy armour with air overhead. Unaided it always falls.
+  - **Skirmish force presets** (light/standard/heavy — heavy fields the new
+    types) + menu entries; AA sprinkled onto the Gap finale, a heavy tank into
+    Watchline's assault (balance re-probed: 8/14 attacker unaided).
+  - **Verification**: 161 vitest tests (component allocation/mount-disable/
+    carry-over/repair-by-name, AA intercept both paths, new-type soundness);
+    self-play NINE scenarios, 0 invariant violations; 18 e2e checks green.
+
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 
 Per the owner: the AI must (a) never behave tactically/logically unsoundly for

@@ -22,7 +22,8 @@ export interface UnitInstance {
   ammo: number[]; // per weapon index, parallel to UnitType.weapons
   fuel: number; // remaining movement-point fuel
   suppression: number; // 0..N morale pressure
-  crits: string[]; // active CritState ids
+  crits: string[]; // active CritState ids (derived from component damage)
+  componentsLost: string[]; // ComponentDef ids knocked out (M2.5)
   supply: number; // supply units: remaining resupply budget (else 0)
   // Per-turn activation (reset each turn): a unit may move once and take one
   // main action (fire or resupply).
@@ -132,6 +133,7 @@ export function createGame(map: MapDef, seed: number): GameState {
       fuel: t.fuelMax,
       suppression: 0,
       crits: [],
+      componentsLost: [],
       supply: t.supplyCapacity ?? 0,
       movedThisTurn: false,
       actedThisTurn: false,

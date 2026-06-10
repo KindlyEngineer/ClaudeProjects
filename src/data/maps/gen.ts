@@ -100,7 +100,9 @@ export function place(
 /** A seeded RANDOM SKIRMISH: a fresh natural 30×20 board each seed, the
  *  canonical forces, a seize objective on the eastern third. Deterministic per
  *  seed, so a good roll is shareable. */
-export function randomSkirmishMap(seed: number): MapDef {
+export type ForcePreset = "light" | "standard" | "heavy";
+
+export function randomSkirmishMap(seed: number, preset: ForcePreset = "standard"): MapDef {
   const cols = 30;
   const rows = 20;
   const mapSeed = (Math.imul(seed, 0x9e3779b1) ^ 0x5eed) >>> 0;
@@ -121,22 +123,36 @@ export function randomSkirmishMap(seed: number): MapDef {
     terrain: (c, r) => (isZone(c, r) ? "urban" : undefined),
   });
   const midRow = (rows / 2) | 0;
-  const units: UnitPlacement[] = [
+  const blue: UnitPlacement[] = [
     place("mech_assault", "blue", 1, midRow - 1, E, "ai"),
-    place("mech_scout", "blue", 1, midRow + 2, E, "ai"),
     place("recon", "blue", 2, midRow - 4, E, "player"),
-    place("armor", "blue", 1, midRow + 4, E, "player"),
     place("infantry", "blue", 0, midRow - 2, E, "player"),
-    place("engineer", "blue", 0, midRow + 3, E, "player"),
     place("artillery", "blue", 0, midRow + 1, E, "player"),
     place("supply", "blue", 0, midRow, E, "player"),
+  ];
+  const red: UnitPlacement[] = [
     place("mech_assault", "red", objCol + 1, objRow, W),
     place("infantry", "red", objCol - 1, objRow - 1, W),
-    place("infantry", "red", objCol, objRow + 2, W),
     place("armor", "red", objCol + 2, objRow + 1, W),
-    place("engineer", "red", objCol, objRow - 2, W),
     place("supply", "red", Math.min(cols - 2, objCol + 4), objRow, W),
   ];
+  if (preset !== "light") {
+    blue.push(
+      place("mech_scout", "blue", 1, midRow + 2, E, "ai"),
+      place("armor", "blue", 1, midRow + 4, E, "player"),
+      place("engineer", "blue", 0, midRow + 3, E, "player"),
+    );
+    red.push(place("infantry", "red", objCol, objRow + 2, W), place("engineer", "red", objCol, objRow - 2, W));
+  }
+  if (preset === "heavy") {
+    blue.push(place("heavy_tank", "blue", 1, midRow - 3, E, "player"), place("atgm_team", "blue", 2, midRow + 1, E, "player"));
+    red.push(
+      place("heavy_tank", "red", objCol + 3, objRow - 1, W),
+      place("aa_vehicle", "red", Math.min(cols - 2, objCol + 5), objRow + 1, W),
+      place("mortar_team", "red", Math.min(cols - 2, objCol + 4), objRow - 2, W),
+    );
+  }
+  const units: UnitPlacement[] = [...blue, ...red];
   return {
     name: `Skirmish ${seed}`,
     hexSize: 1,

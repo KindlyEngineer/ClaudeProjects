@@ -1,6 +1,6 @@
 import { RULES } from "../data/rules";
 import { unitType } from "../data/units";
-import { resolveAttack, inRange, type AttackResult } from "./combat";
+import { resolveAttack, inRange, weaponDisabled, type AttackResult } from "./combat";
 import { rollDice } from "./dice";
 import { addEffect, hasEffect, hostileMinefieldAt, moveCostAt, removeEffect } from "./effects";
 import { climbCost } from "./elevation";
@@ -136,6 +136,7 @@ export function canAttack(state: GameState, attacker: UnitInstance, weaponIndex:
   if (!isScouted(state, attacker.side, target.hex)) return false;
   const weapon = unitType(attacker.typeId).weapons[weaponIndex];
   if (!weapon || attacker.ammo[weaponIndex] <= 0) return false;
+  if (weaponDisabled(attacker, weaponIndex)) return false; // that mount is gone
   return inRange(attacker, weapon, target);
 }
 
@@ -221,6 +222,7 @@ export function canFireMission(state: GameState, unit: UnitInstance, target: Hex
   if (!isEligible(state, unit) || unit.actedThisTurn) return { ok: false, reason: "already acted" };
   if (!canFire(unit) || unit.dryTurns >= RULES.dryFireTurns) return { ok: false, reason: "cannot fire" };
   const weapon = unitType(unit.typeId).weapons[wi];
+  if (weaponDisabled(unit, wi)) return { ok: false, reason: "tube knocked out" };
   if (unit.ammo[wi] < RULES.mission.ammoCost) return { ok: false, reason: "not enough ammo" };
   const d = hexDistance(unit.hex, target);
   if (d < weapon.rangeMin || d > weapon.rangeMax) return { ok: false, reason: "out of range" };

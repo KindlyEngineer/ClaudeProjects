@@ -219,6 +219,9 @@ const ROLE: Record<UnitClass, RoleProfile> = {
   armor: { weights: { objective: 2, seize: 25, attack: 4, exposure: -1.0, cover: 0.8, standoff: 0.8, supply: 1.5, mutual: 0.6, highGround: 0.4 }, idealRange: 9, action: "fire", expendable: 0.4 },
   infantry: { weights: { objective: 1.5, seize: 25, attack: 3, exposure: -1.6, cover: 1.6, supply: 0.8, mutual: 1.0, highGround: 0.25 }, idealRange: 2, action: "fire", expendable: 0.65 },
   engineer: { weights: { objective: 1.5, attack: 2, exposure: -1.6, cover: 1.4, supply: 0.8, mutual: 1.0, highGround: 0.25 }, idealRange: 2, action: "fire", expendable: 0.5 },
+  // Air defence escorts the force: stay inside the formation (mutual), keep the
+  // umbrella over the advance, shoot only what wanders close.
+  aa: { weights: { objective: 1.0, exposure: -2.0, mutual: 1.4, cover: 0.6, supply: 0.6, standoff: 0.8 }, idealRange: 5, action: "fire", expendable: 0.3 },
   // Supply must keep up with the spearhead to sustain it (cautious, but it can't
   // hang back so far the advance runs dry).
   supply: { weights: { objective: 1.3, exposure: -1.2, nearNeedy: 3, supply: 1.0, mutual: 0.6 }, idealRange: 0, action: "resupply", expendable: 0.1 },

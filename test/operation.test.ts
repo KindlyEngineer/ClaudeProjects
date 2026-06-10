@@ -37,6 +37,7 @@ describe("operation lifecycle", () => {
     const mech = state.units.find((u) => u.side === "blue" && unitType(u.typeId).cls === "mech")!;
     const truck = state.units.find((u) => u.side === "blue" && u.typeId === "supply")!;
     mech.structure = 9; // mauled
+    mech.componentsLost.push("sensors"); // the mast is gone (M2.5: damage is component-deep)
     mech.crits.push("sensors");
     truck.structure = 0; // lost
     state.outcome = "blue";
@@ -47,7 +48,8 @@ describe("operation lifecycle", () => {
     expect(op.battleIndex).toBe(1);
     const mechRec = op.roster.find((r) => r.callSign === mech.callSign)!;
     expect(mechRec.structure).toBe(9); // FULL carry-over
-    expect(mechRec.crits).toContain("sensors");
+    expect(mechRec.componentsLost).toContain("sensors"); // the broken part travels
+    expect(mechRec.crits).toContain("sensors"); // and the derived state with it
     expect(op.roster.find((r) => r.typeId === "supply")!.alive).toBe(false);
 
     // Without a replacement, the truck's slot is EMPTY next battle; with a
@@ -65,12 +67,14 @@ describe("operation lifecycle", () => {
     const op = fresh();
     const mech = op.roster.find((r) => unitType(r.typeId).cls === "mech")!;
     mech.structure = 5;
+    mech.componentsLost = ["actuators"]; // legs out (M2.5)
     mech.crits = ["mobility"];
     mech.ammo = mech.ammo.map(() => 0);
     op.stockpile = { ...op.stockpile, repair: 10, ammo: 4 }; // a starved depot
     const report = commanderRefit(op);
     expect(mech.structure).toBe(15); // took all 10 repair
-    expect(mech.crits).toContain("mobility"); // no points left to clear it
+    expect(mech.componentsLost).toContain("actuators"); // no points left for the bench
+    expect(mech.crits).toContain("mobility");
     const line = report.find((l) => l.startsWith(mech.callSign!))!;
     expect(line).toContain("hull +10");
     expect(line).toContain("REQUEST"); // it says what it still needs

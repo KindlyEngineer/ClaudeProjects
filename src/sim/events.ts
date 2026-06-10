@@ -54,6 +54,7 @@ export type GameEvent =
       at: Hex;
       hexes: Hex[]; // the footprint
       hits: Array<{ id: number; damage: number; destroyed: boolean }>; // strikes only
+      intercepted?: boolean; // air defence drove the sortie off (M2.5)
     };
 
 // Omit must DISTRIBUTE over the union (plain Omit collapses it to common keys).

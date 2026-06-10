@@ -62,7 +62,7 @@ export const OPERATION_01: OperationDef = {
   initialStockpile: { ammo: 40, fuel: 80, repair: 40, strikes: 1, recon: 2, credits: 80 },
   prices: {
     mech: 150, // a requisition fields a fully NEW named entity — never a resurrection
-    support: { recon: 30, armor: 60, infantry: 25, engineer: 30, artillery: 70, supply: 35 },
+    support: { recon: 30, armor: 60, aa: 55, infantry: 25, engineer: 30, artillery: 70, supply: 35 },
   },
 };
 

@@ -170,7 +170,6 @@ commander needs · mechanical elevation · call signs + terrain voice.
 
 ---
 *Maintained as decisions land. M1 shipped (carry-over, Interlude, AAR, saves,
-off-map air, shell, MAP03) and UI-4 (tactical design language). M2 in
-progress: mines ✓, defender seat ✓ (Watchline), Causeway ✓, shared generator
-+ seeded random skirmish ✓ — remaining: 2–3 more scenarios, escort/withdrawal
-variants, force-picker presets. Next checkpoint: M2 completion review.*
+off-map air, shell, MAP03) and UI-4 (tactical design language). M2 COMPLETE (mines, defender seat, Causeway, Rearguard, generator + presets) and
+M2.5 (owner pivot): component-deep unit damage + six new types incl. the `aa`
+class that contests off-map strikes. Next: M3 Character (temperaments, weather).*

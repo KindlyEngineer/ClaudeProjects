@@ -1,7 +1,6 @@
 import { clamp } from "../core/math";
-import { pickCrit } from "../data/crits";
 import { RULES } from "../data/rules";
-import type { CritState, WeaponDef } from "../data/types";
+import type { WeaponDef } from "../data/types";
 import { unitType } from "../data/units";
 import { rollDice } from "./dice";
 import { coverAt } from "./effects";
@@ -22,7 +21,7 @@ export interface AttackResult {
   penetrated: boolean;
   damage: number; // structure removed
   destroyed: boolean;
-  crit: CritState | null; // crit inflicted this attack, if any
+  crit: string | null; // the COMPONENT knocked out this attack, if any (M2.5)
   suppression: number; // suppression added to the target
 }
 
@@ -106,9 +105,7 @@ export function resolveAttack(
     let critChance = RULES.baseCritChance;
     if (target.structure < RULES.lowStructureFraction * maxStruct) critChance += RULES.lowStructureCritBonus;
     if (rollDice(state, "crit-occurs", detail) < critChance) {
-      const crit = pickCrit(rollDice(state, "crit-select", detail));
-      result.crit = crit;
-      if (!target.crits.includes(crit)) target.crits.push(crit);
+      result.crit = damageComponent(target, rollDice(state, "crit-select", detail));
     }
 
     if (target.structure <= 0) {
@@ -122,4 +119,38 @@ export function resolveAttack(
     target.crits.push("shaken");
   }
   return result;
+}
+
+/** M2.5 — allocate a crit to one of the target's INTACT components (uniform:
+ *  every unit declares its component table). The component's effect maps onto
+ *  the shared states: mobility/sensors push the matching crit, a CREW hit
+ *  shocks the crew (suppression spike → shaken), and a WEAPON hit disables
+ *  that specific mount (the generic "weapon" crit lands only when every mount
+ *  is gone). Returns the component name for the log, or null if nothing was
+ *  left to break. */
+export function damageComponent(target: UnitInstance, roll: number): string | null {
+  const t = unitType(target.typeId);
+  const intact = t.components.filter((c) => !target.componentsLost.includes(c.id));
+  if (intact.length === 0) return null;
+  const comp = intact[Math.min(intact.length - 1, Math.floor(roll * intact.length))];
+  target.componentsLost.push(comp.id);
+  if (comp.effect === "mobility" && !target.crits.includes("mobility")) target.crits.push("mobility");
+  else if (comp.effect === "sensors" && !target.crits.includes("sensors")) target.crits.push("sensors");
+  else if (comp.effect === "crew") {
+    target.suppression += RULES.suppressionBreak; // the crew is shocked off its feet
+    if (!target.crits.includes("shaken")) target.crits.push("shaken");
+  } else if (comp.effect === "weapon") {
+    const allOut = t.weapons.every((_, wi) =>
+      t.components.some((c) => c.effect === "weapon" && c.weaponIndex === wi && target.componentsLost.includes(c.id)),
+    );
+    if (allOut && !target.crits.includes("weapon")) target.crits.push("weapon");
+  }
+  return comp.name;
+}
+
+/** Is this specific weapon mount knocked out (component damage, M2.5)? */
+export function weaponDisabled(target: UnitInstance, weaponIndex: number): boolean {
+  return unitType(target.typeId).components.some(
+    (c) => c.effect === "weapon" && c.weaponIndex === weaponIndex && target.componentsLost.includes(c.id),
+  );
 }

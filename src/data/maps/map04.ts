@@ -43,7 +43,7 @@ const units: UnitPlacement[] = [
   place("mech_assault", "red", 27, 9, W),
   place("mech_scout", "red", 27, 12, W),
   place("armor", "red", 28, 10, W),
-  place("armor", "red", 28, 7, W),
+  place("heavy_tank", "red", 28, 7, W), // the assault's hammer (M2.5)
   place("infantry", "red", 26, 11, W),
   place("infantry", "red", 26, 8, W),
   place("artillery", "red", 29, 9, W),

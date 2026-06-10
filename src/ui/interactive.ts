@@ -519,7 +519,9 @@ export function startInteractive(
       if (ev.asset === "strike") {
         const kills = ev.hits.filter((h) => h.destroyed).length;
         const dmg = ev.hits.reduce((s, h) => s + h.damage, 0);
-        text = `${who} strikes — ${ev.hits.length ? `${dmg} dmg${kills ? `, <span class="log-kill">${kills} DESTROYED</span>` : ""}` : "no effect on target"}`;
+        text = ev.intercepted
+          ? `${who} strike <span class="log-pen">INTERCEPTED</span> — air defence drove it off`
+          : `${who} strikes — ${ev.hits.length ? `${dmg} dmg${kills ? `, <span class="log-kill">${kills} DESTROYED</span>` : ""}` : "no effect on target"}`;
       } else {
         text = `${who} flies a recon pass — corridor observed`;
       }
@@ -705,6 +707,7 @@ export function startInteractive(
         bar("AMMO", c.ammoFrac, "#d8a03c") +
         (c.suppressionFrac > 0 ? bar("SUP", c.suppressionFrac, "#c4734a") : "") +
         (status ? `<div class="status">${status}</div>` : "") +
+        `<div class="comps">${m.components.map((x) => `<span class="${x.lost ? "comp-lost" : "comp-ok"}">${x.name}</span>`).join(" · ")}</div>` +
         (m.terrain ? `<div class="terrain">${terrainLine(m.terrain)}</div>` : "");
     } else if (m.kind === "enemy") {
       const fresh = m.live ? `<span class="live">IN SIGHT</span>` : `<span class="stale">last seen T${m.lastSeenTurn}</span>`;

@@ -28,6 +28,7 @@ function mkUnit(typeId: string, hex: Hex, facing: Direction, side: "blue" | "red
     fuel: t.fuelMax,
     suppression: 0,
     crits: [],
+    componentsLost: [],
     supply: t.supplyCapacity ?? 0,
     movedThisTurn: false,
     actedThisTurn: false,

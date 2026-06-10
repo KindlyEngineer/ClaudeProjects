@@ -236,7 +236,13 @@ export interface TerrainInfo {
 }
 
 export type InspectModel =
-  | { kind: "own"; card: CardModel; suppression: number; terrain: TerrainInfo | null }
+  | {
+      kind: "own";
+      card: CardModel;
+      suppression: number;
+      terrain: TerrainInfo | null;
+      components: Array<{ name: string; lost: boolean }>; // M2.5 detail readout
+    }
   | {
       kind: "enemy"; // built from BELIEF only — never ground truth
       id: number;
@@ -281,7 +287,13 @@ function enemyInspect(state: GameState, s: Sighting): InspectModel {
 export function inspectModel(state: GameState, viewSide: Side, selectedId: number | null, hex: Hex | null): InspectModel {
   if (selectedId !== null) {
     const own = livingUnits(state, viewSide).find((u) => u.id === selectedId);
-    if (own) return { kind: "own", card: cardModel(state, own), suppression: own.suppression, terrain: terrainInfo(state, own.hex) };
+    if (own) {
+      const components = unitType(own.typeId).components.map((comp) => ({
+        name: comp.name,
+        lost: own.componentsLost.includes(comp.id),
+      }));
+      return { kind: "own", card: cardModel(state, own), suppression: own.suppression, terrain: terrainInfo(state, own.hex), components };
+    }
     const sighting = state.belief[viewSide].get(selectedId);
     if (sighting) return enemyInspect(state, sighting);
     return null; // selected something this side doesn't know — show nothing

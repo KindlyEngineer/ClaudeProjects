@@ -4,7 +4,7 @@ import { unitType } from "../data/units";
 import { rollDice } from "./dice";
 import { emit } from "./events";
 import { hexDistance, hexKey, type Hex } from "./hex";
-import { livingUnits, type GameState } from "./state";
+import { canFire, livingUnits, type GameState } from "./state";
 import { isScouted } from "./vision";
 
 // Off-map assets (M1): side-level air support, budgeted per battle and topped up
@@ -18,6 +18,7 @@ import { isScouted } from "./vision";
 export interface StrikeResult {
   ok: boolean;
   reason?: string;
+  intercepted?: boolean; // hostile air defence drove the sortie off
   hexes: Hex[];
   hits: Array<{ id: number; damage: number; destroyed: boolean }>;
 }
@@ -49,6 +50,19 @@ export function callStrike(state: GameState, side: Side, target: Hex): StrikeRes
   const cfg = RULES.offmap.strike;
   const hexes = footprint(state, target, cfg.radius);
   const keys = new Set(hexes.map(hexKey));
+
+  // Air defence (M2.5): every fire-capable hostile AA unit under the run-in
+  // gets a shot at driving the sortie off. The sortie is spent either way.
+  const aaUnits = livingUnits(state)
+    .filter((u) => u.side !== side && unitType(u.typeId).cls === "aa" && canFire(u) && hexDistance(u.hex, target) <= RULES.aa.radius)
+    .sort((a, b) => a.id - b.id);
+  for (const aa of aaUnits) {
+    if (rollDice(state, "aa-intercept", `${aa.typeId}#${aa.id}`) < RULES.aa.interceptChance) {
+      state.offmap[side].strike -= 1;
+      emit(state, { kind: "offmap", asset: "strike", side, at: { ...target }, hexes: [], hits: [], intercepted: true });
+      return { ok: true, intercepted: true, hexes: [], hits: [] };
+    }
+  }
 
   const hits: StrikeResult["hits"] = [];
   const targets = livingUnits(state)

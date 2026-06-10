@@ -21,6 +21,7 @@ const HOME_PHASE: Record<UnitClass, Phase> = {
   recon: "recon",
   infantry: "recon",
   artillery: "fires",
+  aa: "fires",
   mech: "maneuver",
   armor: "maneuver",
   engineer: "maneuver",

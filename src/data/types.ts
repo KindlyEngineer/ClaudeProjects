@@ -20,6 +20,7 @@ export type UnitClass =
   | "recon"
   | "artillery"
   | "armor"
+  | "aa" // air defence: contests off-map strikes (M2.5)
   | "infantry"
   | "engineer"
   | "supply";
@@ -47,9 +48,20 @@ export interface WeaponDef {
   readonly penetration: number; // vs the target's facing armour value
 }
 
-/** The four shared crit states (brief §2). A crit is a mission-kill, not a
- *  removal — a mobility-killed unit is a stranded problem, still on the board. */
+/** The shared crit states (brief §2). A crit is a mission-kill, not a removal —
+ *  a mobility-killed unit is a stranded problem, still on the board. Since M2.5
+ *  these states are DERIVED from component damage (see ComponentDef). */
 export type CritState = "mobility" | "weapon" | "sensors" | "shaken";
+
+/** A unit COMPONENT (M2.5): the thing a penetrating crit actually breaks.
+ *  Uniformity holds — every unit declares components; the resolution and the
+ *  effect vocabulary are shared. `weapon` effects disable ONE specific mount. */
+export interface ComponentDef {
+  readonly id: string;
+  readonly name: string;
+  readonly effect: "mobility" | "sensors" | "crew" | "weapon";
+  readonly weaponIndex?: number; // for effect "weapon": which mount dies
+}
 
 export interface UnitType {
   readonly id: string;
@@ -61,6 +73,7 @@ export interface UnitType {
   readonly fuelMax: number; // movement-point fuel pool (depletes with moves)
   readonly vision: number; // sight range in hexes
   readonly weapons: readonly WeaponDef[];
+  readonly components: readonly ComponentDef[]; // what crits can break (M2.5)
   readonly supplyCapacity?: number; // supply units only: resupply budget
   readonly light: boolean; // acts in the recon/light initiative phase
 }

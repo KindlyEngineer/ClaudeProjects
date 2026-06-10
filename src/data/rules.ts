@@ -65,6 +65,14 @@ export const RULES = {
     mobilityCritChance: 0.5, // tracks and legs are what mines eat
   },
 
+  // Air defence (M2.5): each living, fire-capable hostile AA unit within
+  // `radius` of a strike's target rolls to drive the sortie off (sortie spent,
+  // no effect). Overflights fly high and fast — uncontested in v1.
+  aa: {
+    radius: 3,
+    interceptChance: 0.55,
+  },
+
   // Mech commander utility AI (the player's influence surface). Thresholds below
   // which a mech needs to break contact; weights for scoring candidate moves.
   commander: {

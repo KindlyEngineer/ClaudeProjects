@@ -61,7 +61,9 @@ describe("the mirror — the AI attacks as red", () => {
       h: 5,
       seed: 1,
       objective,
-      units: [place("mech_assault", "red", axial(16, 2), 3), place("armor", "blue", axial(2, 2))],
+      // Red brings a truck so the all-support-lost attrition rule can't trip
+      // the moment the mech stalls (the test is about DIRECTION, not attrition).
+      units: [place("mech_assault", "red", axial(16, 2), 3), place("supply", "red", axial(17, 2), 3), place("armor", "blue", axial(2, 2))],
     });
     const red = mech(s, "red")!;
     const startQ = red.hex.q;

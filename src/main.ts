@@ -20,7 +20,8 @@ import { MAP02 } from "./data/maps/map02";
 import { MAP03 } from "./data/maps/map03";
 import { MAP04 } from "./data/maps/map04";
 import { MAP05 } from "./data/maps/map05";
-import { randomSkirmishMap } from "./data/maps/gen";
+import { MAP06 } from "./data/maps/map06";
+import { randomSkirmishMap, type ForcePreset } from "./data/maps/gen";
 
 // Boot router (M1). Routes by URL so every page loads deterministically:
 //   (no params)            → the title menu
@@ -99,9 +100,11 @@ function bootBattle(op: OperationState | null): void {
               ? MAP04
               : mapParam === "causeway"
                 ? MAP05
-                : mapParam === "random"
-                  ? randomSkirmishMap(seed)
-                  : MAP01;
+                : mapParam === "rearguard"
+                  ? MAP06
+                  : mapParam === "random"
+                    ? randomSkirmishMap(seed, (params.get("force") as ForcePreset) ?? "standard")
+                    : MAP01;
     state = createGame(map, seed);
   }
 
