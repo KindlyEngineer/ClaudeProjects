@@ -1,7 +1,9 @@
 # VANTAGE — Architecture & Build Plan
 
-Companion to [`../brief.md`](../brief.md) (the spec). This is the engineering
-plan: stack, module map, the v0 slice roadmap, and the verification loop.
+Companion to [`../brief.md`](../brief.md) (the founding spec) and
+[`endstate.md`](endstate.md) (the 1.0 destination + ratified decisions). This
+is the engineering build log: stack, module map, the slice roadmap, and the
+verification loop.
 
 ## Stack
 TypeScript + Three.js (2.5D WebGL) + Vite, tested with Vitest, screenshot-

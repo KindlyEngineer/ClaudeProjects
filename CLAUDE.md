@@ -63,8 +63,9 @@ by an autonomous main effort.
 - `test/` — Vitest unit tests (pure logic, no GPU)
 - `tools/screenshot.ts` — Playwright board-state capture · `tools/uitest.ts` —
   end-to-end mouse-gesture test (`npm run uitest`)
-- `docs/` — `brief.md` (source of truth), `game/` (design + architecture),
-  `cloud-environment.md`
+- `docs/` — `brief.md` (founding spec, source of truth), `game/endstate.md`
+  (**the 1.0 destination + ratified decisions — check before scoping new
+  work**), `game/architecture.md` (build log), `cloud-environment.md`
 
 ## Architecture rules (from the brief)
 - **Pure-function deterministic sim, fully separate from render.** Render only
