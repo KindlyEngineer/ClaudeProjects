@@ -318,6 +318,18 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
     uitest` 18 e2e checks (side-level overflight through the real targeting
     UI); menu/Interlude/Gap screenshots under `docs/shots/`.
 
+- **UI-4 — Tactical design language (C2 console + dieselpunk warmth)** ✅
+  Owner direction: the UI read as a children's game. Full restyle, no new art
+  burden: design tokens (near-black panels, 1px strokes, squared corners,
+  uppercase microtype; colour = MEANING — friendly steel `#5d9ec9`, hostile
+  signal-red `#c4554a`, amber `#d8a03c` for selection/warnings/CTAs, corner
+  brackets + amber rules for flair). Board terrain desaturated to planning-
+  display tones; unit badges rebuilt as NATO-style frames (friendly rectangle /
+  hostile diamond / dashed ghost, structure bar in the base) over the kept 3D
+  models; banners as squared C2 readout strips; every overlay/effect re-toned.
+  Emoji → uppercase labels. 147 tests + 18 e2e unchanged-green; restyled
+  screenshots under `docs/shots/ui4-*`.
+
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 
 Per the owner: the AI must (a) never behave tactically/logically unsoundly for

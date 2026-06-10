@@ -57,7 +57,7 @@ export function buildFacingPicker(state: GameState, hex: Hex, active: Direction)
     const isActive = d === active;
     const arrow = new THREE.Mesh(
       new THREE.ConeGeometry(size * (isActive ? 0.22 : 0.15), size * (isActive ? 0.62 : 0.42), 12),
-      new THREE.MeshBasicMaterial({ color: isActive ? 0xfff2a8 : 0xffd24a, transparent: true, opacity: isActive ? 1 : 0.55, depthTest: false }),
+      new THREE.MeshBasicMaterial({ color: isActive ? 0xf0bc5c : 0x8a6a2f, transparent: true, opacity: isActive ? 1 : 0.55, depthTest: false }),
     );
     arrow.quaternion.setFromUnitVectors(up, dir); // lay the cone pointing outward
     arrow.position.set(c.x + dir.x * size * (isActive ? 0.78 : 0.7), y, c.z + dir.z * size * (isActive ? 0.78 : 0.7));
@@ -78,14 +78,12 @@ export function buildHexLabels(state: GameState, items: ReadonlyArray<{ hex: Hex
     canvas.width = 96;
     canvas.height = 48;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "rgba(8,10,14,0.85)";
-    ctx.beginPath();
-    ctx.roundRect(2, 2, 92, 44, 10);
-    ctx.fill();
-    ctx.strokeStyle = "#ff5a4a";
+    ctx.fillStyle = "rgba(10,11,13,0.92)";
+    ctx.fillRect(2, 2, 92, 44);
+    ctx.strokeStyle = "#c4554a";
     ctx.lineWidth = 3;
     ctx.stroke();
-    ctx.fillStyle = "#ffd9d4";
+    ctx.fillStyle = "#d8a03c";
     ctx.font = "bold 26px ui-monospace, monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";

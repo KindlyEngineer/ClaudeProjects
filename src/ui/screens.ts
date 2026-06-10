@@ -166,15 +166,15 @@ export function renderInterlude(root: HTMLElement, op: OperationState): void {
         }),
       );
     }
-    ops.appendChild(btn("Assign strike sortie ▸ next battle", "btn tiny btn-alt", () => (assignSorties(op, 1, 0), save(), render())));
-    ops.appendChild(btn("Assign overflight ▸ next battle", "btn tiny btn-alt", () => (assignSorties(op, 0, 1), save(), render())));
+    ops.appendChild(btn("Assign strike sortie → next battle", "btn tiny btn-alt", () => (assignSorties(op, 1, 0), save(), render())));
+    ops.appendChild(btn("Assign overflight → next battle", "btn tiny btn-alt", () => (assignSorties(op, 0, 1), save(), render())));
     ops.appendChild(
-      el("div", "hint", `Assigned to ${battle.title}: ✈ ${op.nextOffmap.strike} strike · 👁 ${op.nextOffmap.recon} overflight (fly this battle or not at all)`),
+      el("div", "hint", `Assigned to ${battle.title}: strike ×${op.nextOffmap.strike} · overflight ×${op.nextOffmap.recon} (fly this battle or not at all)`),
     );
     screen.appendChild(ops);
 
     screen.appendChild(
-      btn(`Begin ${battle.title} ▸`, "btn begin", () => {
+      btn(`Begin ${battle.title}`, "btn begin", () => {
         finishInterlude(op); // the commander draws from what's left
         save();
         nav(`?op=${op.defId}&battle=${op.battleIndex}`);
@@ -253,7 +253,7 @@ export function buildAAR(state: GameState, op: OperationState, onContinue: () =>
   box.appendChild(lines);
 
   const row = el("div", "end-row");
-  row.appendChild(btn("Continue ▸", "btn", onContinue));
+  row.appendChild(btn("Continue", "btn", onContinue));
   box.appendChild(row);
   return box;
 }

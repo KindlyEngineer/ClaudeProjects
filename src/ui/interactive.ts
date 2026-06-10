@@ -179,7 +179,7 @@ export function startInteractive(
     // While aiming a move (or a turn-in-place), the board shows only the
     // destination + the facing rosette, the aimed face tracking the mouse.
     if (pendingMove) {
-      g.add(buildHexOverlay(state, [pendingMove.dest], 0xffe66a, 0.4));
+      g.add(buildHexOverlay(state, [pendingMove.dest], 0xd8a03c, 0.4));
       g.add(buildFacingPicker(state, pendingMove.dest, pendingMove.facing));
       return g;
     }
@@ -188,18 +188,18 @@ export function startInteractive(
     if (targeting) {
       const sel = selectedUnit();
       if (sel && targeting === "fortify") {
-        g.add(buildHexOverlay(state, fortifyTargets(state, sel), 0xd8c47a, 0.4));
+        g.add(buildHexOverlay(state, fortifyTargets(state, sel), 0xd8a03c, 0.4));
       } else if (targeting === "strike" && hoverHex) {
         const ok = canCallStrike(state, playerSide, hoverHex).ok;
         const area = state.map.cells.filter((c) => hexDistance(c.hex, hoverHex!) <= RULES.offmap.strike.radius).map((c) => c.hex);
-        g.add(buildHexOverlay(state, area, ok ? 0xff7a3a : 0x666c78, ok ? 0.45 : 0.18));
+        g.add(buildHexOverlay(state, area, ok ? 0xc4554a : 0x4a4f55, ok ? 0.45 : 0.18));
       } else if (targeting === "airrecon" && hoverHex) {
         const ok = canCallReconFlight(state, playerSide, hoverHex).ok;
         const area = state.map.cells.filter((c) => hexDistance(c.hex, hoverHex!) <= RULES.offmap.reconFlight.radius).map((c) => c.hex);
-        g.add(buildHexOverlay(state, area, ok ? 0x6ab0ff : 0x666c78, ok ? 0.22 : 0.1));
+        g.add(buildHexOverlay(state, area, ok ? 0x5d9ec9 : 0x4a4f55, ok ? 0.22 : 0.1));
       } else if (sel && hoverHex && (targeting === "suppress" || targeting === "smoke")) {
         const ok = canFireMission(state, sel, hoverHex, targeting).ok;
-        const color = !ok ? 0x666c78 : targeting === "suppress" ? 0xff8a3a : 0xb8c2cc;
+        const color = !ok ? 0x666c78 : targeting === "suppress" ? 0xc4734a : 0x8a9298;
         g.add(buildHexOverlay(state, missionArea(state, hoverHex), color, ok ? 0.4 : 0.18));
       }
       return g;
@@ -208,13 +208,13 @@ export function startInteractive(
     const o = currentOptions();
     const moveHexes: Hex[] = [];
     for (const key of o.moveKeys) moveHexes.push(o.reach.get(key)!.hex);
-    if (moveHexes.length) g.add(buildHexOverlay(state, moveHexes, 0x4a90ff, 0.28));
+    if (moveHexes.length) g.add(buildHexOverlay(state, moveHexes, 0x3d6f99, 0.30));
     const targetHexes: Hex[] = [];
     for (const id of o.attack.keys()) {
       const e = livingUnits(state).find((u) => u.id === id);
       if (e) targetHexes.push(e.hex);
     }
-    if (targetHexes.length) g.add(buildHexOverlay(state, targetHexes, 0xff5a4a, 0.42));
+    if (targetHexes.length) g.add(buildHexOverlay(state, targetHexes, 0xc4554a, 0.42));
     // BattleTech-style hit-chance preview over each target.
     if (sel && targetHexes.length) {
       g.add(buildHexLabels(state, attackPreviews(state, sel).map((p) => ({ hex: p.hex, text: `${p.hitPct}%` }))));
@@ -224,7 +224,7 @@ export function startInteractive(
       const f = livingUnits(state).find((u) => u.id === id);
       if (f) supplyHexes.push(f.hex);
     }
-    if (supplyHexes.length) g.add(buildHexOverlay(state, supplyHexes, 0x5ad06a, 0.4));
+    if (supplyHexes.length) g.add(buildHexOverlay(state, supplyHexes, 0x6a8e5d, 0.4));
     return g;
   }
 
@@ -503,9 +503,9 @@ export function startInteractive(
       if (ev.asset === "strike") {
         const kills = ev.hits.filter((h) => h.destroyed).length;
         const dmg = ev.hits.reduce((s, h) => s + h.damage, 0);
-        text = `✈ ${who} strikes — ${ev.hits.length ? `${dmg} dmg${kills ? `, <span class="log-kill">${kills} DESTROYED</span>` : ""}` : "no effect on target"}`;
+        text = `${who} strikes — ${ev.hits.length ? `${dmg} dmg${kills ? `, <span class="log-kill">${kills} DESTROYED</span>` : ""}` : "no effect on target"}`;
       } else {
-        text = `👁 ${who} flies a recon pass — corridor observed`;
+        text = `${who} flies a recon pass — corridor observed`;
       }
     } else if (ev.kind === "resupply") {
       const parts = [ev.ammo > 0 ? `+${ev.ammo} ammo` : "", ev.fuel > 0 ? `+${ev.fuel} fuel` : ""].filter(Boolean).join(", ");
@@ -547,26 +547,26 @@ export function startInteractive(
   }
 
   const CRIT_LABEL: Record<string, string> = {
-    mobility: "⚙ immobilised",
-    weapon: "✕ weapon out",
-    sensors: "◌ sensors hit",
-    shaken: "⚠ shaken",
+    mobility: "IMMOBILISED",
+    weapon: "WEAPON OUT",
+    sensors: "SENSORS HIT",
+    shaken: "SHAKEN",
   };
 
   function cardEl(m: CardModel): HTMLElement {
     const el = document.createElement("div");
     el.className = "card" + (m.ready ? "" : " greyed") + (m.id === selectedId ? " selected" : "");
-    el.style.setProperty("--side", m.side === "blue" ? "#4a90ff" : "#ff5a4a");
-    const status = [...m.crits.map((c) => CRIT_LABEL[c] ?? c), m.inSupply ? "" : "⛌ cut off"].filter(Boolean).join(" · ");
+    el.style.setProperty("--side", m.side === "blue" ? "#5d9ec9" : "#c4554a");
+    const status = [...m.crits.map((c) => CRIT_LABEL[c] ?? c), m.inSupply ? "" : "CUT OFF"].filter(Boolean).join(" · ");
     const tag = m.controllable ? (m.ready ? "READY" : m.reserved ? "RSV" : "—") : "AI";
     const nm = m.subtitle ? `${m.name}<span class="sub"> ${m.subtitle}</span>` : m.name;
     el.innerHTML =
       `<div class="card-h"><span class="abbr">${m.abbr}</span><span class="nm">${nm}</span>` +
       `<span class="tag">${tag}</span></div>` +
-      bar("STR", m.structureFrac, "#5ad06a") +
-      bar("FUEL", m.fuelFrac, "#7fb0ff") +
-      bar("AMMO", m.ammoFrac, "#e6c84a") +
-      (m.suppressionFrac > 0 ? bar("SUP", m.suppressionFrac, "#ff8a4a") : "") +
+      bar("STR", m.structureFrac, "#7da06a") +
+      bar("FUEL", m.fuelFrac, "#5d9ec9") +
+      bar("AMMO", m.ammoFrac, "#d8a03c") +
+      (m.suppressionFrac > 0 ? bar("SUP", m.suppressionFrac, "#c4734a") : "") +
       (m.intent ? `<div class="intent">▸ ${m.intent}</div>` : "") +
       (status ? `<div class="status">${status}</div>` : "");
     el.addEventListener("click", () => {
@@ -636,25 +636,25 @@ export function startInteractive(
         };
         // Side-level air (no unit selection needed — the budget is the limiter).
         const air = state.offmap[playerSide];
-        if (air.strike > 0) mkBtn(`✈ Strike (${air.strike})`, "btn btn-alt", enterTargeting("strike"));
-        if (air.recon > 0) mkBtn(`👁 Overflight (${air.recon})`, "btn btn-alt", enterTargeting("airrecon"));
+        if (air.strike > 0) mkBtn(`Air Strike ×${air.strike}`, "btn btn-alt", enterTargeting("strike"));
+        if (air.recon > 0) mkBtn(`Overflight ×${air.recon}`, "btn btn-alt", enterTargeting("airrecon"));
         // Support verbs for the selected unit (artillery missions / engineering).
         if (sel) {
           const sv = supportActions(state, sel);
           if (sv.missions) {
-            mkBtn("☄ Suppress", "btn btn-alt", enterTargeting("suppress"));
-            mkBtn("▒ Smoke", "btn btn-alt", enterTargeting("smoke"));
+            mkBtn("Suppress", "btn btn-alt", enterTargeting("suppress"));
+            mkBtn("Smoke", "btn btn-alt", enterTargeting("smoke"));
           }
-          if (sv.fortify) mkBtn("▦ Fortify", "btn btn-alt", enterTargeting("fortify"));
+          if (sv.fortify) mkBtn("Fortify", "btn btn-alt", enterTargeting("fortify"));
           if (canReserve(state, sel)) {
-            mkBtn("Hold in reserve", "btn btn-alt", () => {
+            mkBtn("Reserve", "btn btn-alt", () => {
               sel.reserved = true;
               selectedId = null;
               refresh();
             });
           }
         }
-        mkBtn(`End ${state.phase} phase ▸`, "btn", endPhase);
+        mkBtn(`End ${state.phase} phase`, "btn", endPhase);
       }
     }
   }
@@ -673,23 +673,23 @@ export function startInteractive(
     el.className = "inspect-body";
     if (m.kind === "own") {
       const c = m.card;
-      const status = [...c.crits.map((x) => CRIT_LABEL[x] ?? x), c.inSupply ? "" : "⛌ cut off"].filter(Boolean).join(" · ");
-      el.style.setProperty("--side", c.side === "blue" ? "#4a90ff" : "#ff5a4a");
+      const status = [...c.crits.map((x) => CRIT_LABEL[x] ?? x), c.inSupply ? "" : "CUT OFF"].filter(Boolean).join(" · ");
+      el.style.setProperty("--side", c.side === "blue" ? "#5d9ec9" : "#c4554a");
       el.innerHTML =
         `<div class="card-h"><span class="abbr">${c.abbr}</span><span class="nm">${c.name}</span><span class="tag">${c.controllable ? "YOURS" : "AI ALLY"}</span></div>` +
-        bar("STR", c.structureFrac, "#5ad06a") +
-        bar("FUEL", c.fuelFrac, "#7fb0ff") +
-        bar("AMMO", c.ammoFrac, "#e6c84a") +
-        (c.suppressionFrac > 0 ? bar("SUP", c.suppressionFrac, "#ff8a4a") : "") +
+        bar("STR", c.structureFrac, "#7da06a") +
+        bar("FUEL", c.fuelFrac, "#5d9ec9") +
+        bar("AMMO", c.ammoFrac, "#d8a03c") +
+        (c.suppressionFrac > 0 ? bar("SUP", c.suppressionFrac, "#c4734a") : "") +
         (status ? `<div class="status">${status}</div>` : "") +
         (m.terrain ? `<div class="terrain">${terrainLine(m.terrain)}</div>` : "");
     } else if (m.kind === "enemy") {
       const fresh = m.live ? `<span class="live">IN SIGHT</span>` : `<span class="stale">last seen T${m.lastSeenTurn}</span>`;
       const status = m.crits.map((x) => CRIT_LABEL[x] ?? x).join(" · ");
-      el.style.setProperty("--side", m.side === "blue" ? "#4a90ff" : "#ff5a4a");
+      el.style.setProperty("--side", m.side === "blue" ? "#5d9ec9" : "#c4554a");
       el.innerHTML =
         `<div class="card-h"><span class="abbr">${m.abbr}</span><span class="nm">${m.name}</span><span class="tag">${fresh}</span></div>` +
-        bar("STR", m.structureFrac, "#5ad06a") +
+        bar("STR", m.structureFrac, "#7da06a") +
         (status ? `<div class="status">${status}</div>` : "") +
         (m.terrain ? `<div class="terrain">${terrainLine(m.terrain)}</div>` : "") +
         `<div class="foot">known position — intel, not ground truth</div>`;

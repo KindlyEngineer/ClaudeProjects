@@ -48,7 +48,7 @@ export class Stage {
     const pts: THREE.Vector3[] = hexCorners(this.size * 0.96).map((c) => new THREE.Vector3(c.x, 0, c.z));
     this.hoverRing = new THREE.LineLoop(
       new THREE.BufferGeometry().setFromPoints(pts),
-      new THREE.LineBasicMaterial({ color: 0xbfd4ff, transparent: true, opacity: 0.85 }),
+      new THREE.LineBasicMaterial({ color: 0xd8a03c, transparent: true, opacity: 0.85 }),
     );
     this.hoverRing.visible = false;
     this.group.add(this.hoverRing);
@@ -180,7 +180,7 @@ export class Stage {
     const dirSign = ev.side === "blue" ? 1 : -1;
     const jet = new THREE.Mesh(
       new THREE.ConeGeometry(0.16, 0.9, 6),
-      new THREE.MeshBasicMaterial({ color: ev.side === "blue" ? 0x9fc4ff : 0xffb4a8 }),
+      new THREE.MeshBasicMaterial({ color: ev.side === "blue" ? 0x5d9ec9 : 0xc4554a }),
     );
     jet.rotation.z = -dirSign * (Math.PI / 2); // nose along the flight path
     this.fx.add(jet);
@@ -203,9 +203,9 @@ export class Stage {
       for (const hit of ev.hits) {
         const u = this.state.units.find((x) => x.id === hit.id);
         if (!u) continue;
-        if (hit.damage > 0) this.floatText(u.hex, `${hit.damage} dmg`, "#ffb27a");
+        if (hit.damage > 0) this.floatText(u.hex, `${hit.damage} dmg`, "#d8a03c");
         if (hit.destroyed) {
-          this.floatText(u.hex, "DESTROYED", "#ff5a4a", 1.0);
+          this.floatText(u.hex, "DESTROYED", "#c4554a", 1.0);
           await this.playDeath(hit.id, u.hex);
         }
       }
@@ -214,12 +214,12 @@ export class Stage {
       // The sensor sweep: an expanding ring the size of the coverage.
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(0.3, 0.55, 32),
-        new THREE.MeshBasicMaterial({ color: 0x6ab0ff, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color: 0x5d9ec9, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }),
       );
       ring.rotation.x = -Math.PI / 2;
       ring.position.set(c.x, this.groundY(ev.at) + 0.15, c.z);
       this.fx.add(ring);
-      this.floatText(ev.at, "RECON OVERFLIGHT", "#9fc4ff");
+      this.floatText(ev.at, "RECON OVERFLIGHT", "#7ab0d4");
       await tween(520, (t) => {
         ring.scale.setScalar(1 + t * 7);
         (ring.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - t);
@@ -244,17 +244,17 @@ export class Stage {
     if (ev.mission === "suppress") {
       for (const id of ev.suppressedIds) {
         const u = this.state.units.find((x) => x.id === id);
-        if (u && (this.shownLive(id) || u.side === this.lastOpts.viewSide)) this.floatText(u.hex, "SUPPRESSED", "#ffb27a");
+        if (u && (this.shownLive(id) || u.side === this.lastOpts.viewSide)) this.floatText(u.hex, "SUPPRESSED", "#d8a03c");
       }
     } else {
-      this.floatText(ev.at, "SMOKE SCREEN", "#cfd8ee");
+      this.floatText(ev.at, "SMOKE SCREEN", "#9aa3a8");
     }
     await delay(220);
   }
 
   private async playBuild(ev: Extract<GameEvent, { kind: "build" }>): Promise<void> {
     if (!this.shownLive(ev.id) && this.state.units.find((u) => u.id === ev.id)?.side !== this.lastOpts.viewSide) return;
-    this.floatText(ev.at, "FORTIFIED", "#d8c47a");
+    this.floatText(ev.at, "FORTIFIED", "#d8a03c");
     await delay(260);
   }
 
@@ -358,10 +358,10 @@ export class Stage {
         if (ev.penetrated) bits.push(`${ev.damage} dmg · ${ev.arc} armour`);
         else bits.push("deflected");
         if (ev.suppression > 0) bits.push(`+${ev.suppression} supp`);
-        this.floatText(ev.at, bits.join("  "), ev.penetrated ? "#ffb27a" : "#cfd8ee");
-        if (ev.crit) this.floatText(ev.at, `CRIT — ${ev.crit}`, "#ff7ab0", 0.55);
+        this.floatText(ev.at, bits.join("  "), ev.penetrated ? "#d8a03c" : "#9aa3a8");
+        if (ev.crit) this.floatText(ev.at, `CRIT — ${ev.crit}`, "#f0bc5c", 0.55);
         if (ev.destroyed) {
-          this.floatText(ev.at, "DESTROYED", "#ff5a4a", 1.0);
+          this.floatText(ev.at, "DESTROYED", "#c4554a", 1.0);
           await this.playDeath(ev.targetId, ev.at);
         }
       }
@@ -424,7 +424,7 @@ export class Stage {
     const c = hexToWorld(target.hex, this.size);
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.2, 0.3, 20),
-      new THREE.MeshBasicMaterial({ color: 0x5ad06a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0x6a8e5d, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }),
     );
     ring.rotation.x = -Math.PI / 2;
     ring.position.set(c.x, this.groundY(target.hex) + 0.08, c.z);
@@ -432,7 +432,7 @@ export class Stage {
     const parts: string[] = [];
     if (ev.ammo > 0) parts.push(`+${ev.ammo} ammo`);
     if (ev.fuel > 0) parts.push(`+${ev.fuel} fuel`);
-    this.floatText(target.hex, parts.join("  ") || "resupplied", "#7fe09a");
+    this.floatText(target.hex, parts.join("  ") || "resupplied", "#8eb07a");
     await tween(360, (t) => {
       ring.scale.setScalar(1 + t * 2.4);
       (ring.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - t);

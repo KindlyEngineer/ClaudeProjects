@@ -28,8 +28,8 @@ export function createView(container: HTMLElement): View {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a0c10);
-  scene.fog = new THREE.Fog(0x0a0c10, 70, 200);
+  scene.background = new THREE.Color(0x0a0b0d);
+  scene.fog = new THREE.Fog(0x0a0b0d, 70, 200);
 
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
 
