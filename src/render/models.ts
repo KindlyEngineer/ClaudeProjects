@@ -25,7 +25,9 @@ export interface UnitModel {
 
 const DARK = 0x23262c; // tracks, wheels, under-hulls
 const GUNMETAL = 0x3a3f48;
-const SIDE_COLOR: Record<string, number> = { blue: 0x4a90ff, red: 0xff5a4a };
+// UI-4 tactical palette: NATO convention at low saturation — steel-blue
+// friendly, muted signal-red hostile (selection/warnings are amber).
+const SIDE_COLOR: Record<string, number> = { blue: 0x5d9ec9, red: 0xc4554a };
 
 function mat(color: number, emissiveScale = 0.12): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
@@ -108,7 +110,7 @@ function mechModel(color: number, light: boolean): UnitModel {
 
   // Torso + cockpit visor
   g.add(box(0.34 * s, 0.26, 0.3 * s, body, 0.01, 0.58, 0));
-  const visor = box(0.05, 0.07, 0.16 * s, new THREE.MeshStandardMaterial({ color: 0x9fe0ff, emissive: 0x3fb0ff, emissiveIntensity: 0.7, roughness: 0.3 }), 0.18 * s, 0.62, 0);
+  const visor = box(0.05, 0.07, 0.16 * s, new THREE.MeshStandardMaterial({ color: 0x8fb8d0, emissive: 0x3a6f8e, emissiveIntensity: 0.55, roughness: 0.3 }), 0.18 * s, 0.62, 0);
   g.add(visor);
   g.add(box(0.16 * s, 0.07, 0.2 * s, dark, -0.06, 0.75, 0)); // dorsal housing
   const antenna = cyl(0.008, 0.008, 0.22, gun, -0.12 * s, 0.88, 0.08 * s);
@@ -360,7 +362,7 @@ export function buildUnitMarker(u: MarkerData, opts: MarkerOpts): Marker {
   if (opts.selected) {
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(opts.size * 0.62, opts.size * 0.82, 24),
-      new THREE.MeshBasicMaterial({ color: 0xffe66a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0xd8a03c, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }),
     );
     ring.rotation.x = -Math.PI / 2;
     ring.position.set(0, 0.06, 0);
@@ -391,79 +393,87 @@ export function buildUnitMarker(u: MarkerData, opts: MarkerOpts): Marker {
   return { group: g, model };
 }
 
-// A wide billboarded banner above a mech showing its commander's current intent.
+// The intent banner: a squared C2 readout strip — dark, thin side-colour rule,
+// uppercase — above a mech (UI-4 design language).
 function makeIntentBanner(text: string, color: number, stagger: number): THREE.Sprite {
   const W = 512;
-  const H = 96;
+  const H = 84;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "rgba(8,10,14,0.82)";
-  ctx.beginPath();
-  ctx.roundRect(4, 4, W - 8, H - 8, 16);
-  ctx.fill();
-  ctx.strokeStyle = `#${color.toString(16).padStart(6, "0")}`;
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  ctx.fillStyle = "#eaf0ff";
-  ctx.font = "30px ui-monospace, monospace";
-  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(10,11,13,0.9)";
+  ctx.fillRect(2, 2, W - 4, H - 4);
+  ctx.strokeStyle = "#2b2f36";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(2, 2, W - 4, H - 4);
+  ctx.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
+  ctx.fillRect(2, 2, 5, H - 4); // the side-colour rule
+  ctx.fillStyle = "#c3c9ce";
+  ctx.font = "600 26px ui-monospace, monospace";
+  ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, W / 2, H / 2 + 2, W - 28);
+  ctx.fillText(text.toUpperCase(), 20, H / 2 + 1, W - 36);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
   sprite.position.set(0, 2.5 + stagger * 0.9, 0);
-  sprite.scale.set(2.6 * (W / H), 2.6, 1);
+  sprite.scale.set(2.55 * (W / H), 2.55, 1);
   return sprite;
 }
 
-// A billboarded badge: side-coloured ring, a health arc (green→red by remaining
-// structure), the class letter, and small status pips (orange = shaken crew,
-// red = cut off from supply). Ghosts get a grey ring and no supply pip: the
-// data is last-known, not live.
+// The unit badge as a NATO-style FRAME (UI-4): friendly = rectangle, hostile =
+// diamond, thin stroke on a dark fill, the class letter inside, a thin
+// structure bar along the base. Ghosts (remembered sightings) render dashed
+// grey; an amber corner square marks a cut supply line; a shaken crew turns
+// the letter amber. Symbology for reading, models for feel.
 function makeBadge(u: MarkerData, abbr: string, color: number, ghost: boolean): THREE.Sprite {
   const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 64;
+  canvas.width = canvas.height = 72;
   const ctx = canvas.getContext("2d")!;
-  const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
+  const stroke = ghost ? "#6a7077" : `#${color.toString(16).padStart(6, "0")}`;
+  const hostile = u.side === "red"; // hostile frames are diamonds (APP-6 flavour)
 
-  ctx.fillStyle = "rgba(8,10,14,0.88)";
-  ctx.beginPath();
-  ctx.arc(32, 32, 28, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.save();
+  if (hostile) {
+    ctx.translate(36, 36);
+    ctx.rotate(Math.PI / 4);
+    ctx.translate(-36, -36);
+  }
+  const f = hostile ? 14 : 10; // inset so the rotated frame still fits
+  ctx.fillStyle = "rgba(10,11,13,0.92)";
+  ctx.fillRect(f, f, 72 - f * 2, 72 - f * 2);
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 3;
+  if (ghost) ctx.setLineDash([5, 4]);
+  ctx.strokeRect(f, f, 72 - f * 2, 72 - f * 2);
+  ctx.setLineDash([]);
+  ctx.restore();
 
-  ctx.strokeStyle = ghost ? "#8a8f9a" : hex(color); // grey ring = remembered, not live
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.arc(32, 32, 29, 0, Math.PI * 2);
-  ctx.stroke();
-
-  const frac = Math.max(0, Math.min(1, u.structure / unitType(u.typeId).structure));
-  ctx.strokeStyle = frac > 0.6 ? "#5ad06a" : frac > 0.3 ? "#e6c84a" : "#e0563c";
-  ctx.lineWidth = 6;
-  ctx.beginPath();
-  ctx.arc(32, 32, 23, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
-  ctx.stroke();
-
-  ctx.fillStyle = u.crits.includes("shaken") ? "#ffb23c" : "#ffffff";
-  ctx.font = "bold 30px ui-monospace, monospace";
+  // Class letter (upright regardless of frame shape).
+  ctx.fillStyle = u.crits.includes("shaken") ? "#d8a03c" : "#c3c9ce";
+  ctx.font = "800 26px ui-monospace, monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(abbr, 32, 33);
+  ctx.fillText(abbr, 36, 35);
+
+  // Structure bar along the base of the symbol.
+  const frac = Math.max(0, Math.min(1, u.structure / unitType(u.typeId).structure));
+  ctx.fillStyle = "#1c2025";
+  ctx.fillRect(18, 58, 36, 4);
+  ctx.fillStyle = frac > 0.6 ? "#7da06a" : frac > 0.3 ? "#d8a03c" : "#c4554a";
+  ctx.fillRect(18, 58, 36 * frac, 4);
 
   if (!u.inSupply && !ghost) {
-    ctx.fillStyle = "#ff4a4a"; // cut off from supply
-    ctx.beginPath();
-    ctx.arc(50, 16, 7, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = "#d8a03c"; // cut off from supply — amber corner mark
+    ctx.fillRect(56, 8, 8, 8);
   }
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true }));
   sprite.position.set(0, 1.45, 0);
-  sprite.scale.set(0.8, 0.8, 0.8);
+  sprite.scale.set(0.85, 0.85, 0.85);
   return sprite;
 }
+
