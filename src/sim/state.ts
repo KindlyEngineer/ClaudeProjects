@@ -16,6 +16,7 @@ export interface UnitInstance {
   side: Side;
   controller: Controller; // who issues this unit's orders (ai / player)
   callSign?: string; // the main effort's name — the entity you serve (mechs only)
+  trust?: number; // 0..100 confidence in the support (operations only; D13). Unset = neutral.
   hex: Hex;
   facing: Direction;
   structure: number; // remaining; 0 = destroyed

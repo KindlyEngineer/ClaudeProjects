@@ -1,9 +1,11 @@
 import { mapById, OPERATIONS } from "../data/operations";
+import { RULES } from "../data/rules";
 import { terrain } from "../data/terrain";
 import type { MapDef, OperationDef, Stockpile, UnitPlacement } from "../data/types";
 import { unitType } from "../data/units";
 import { hexDistance, hexKey, type Hex } from "./hex";
 import { CALL_SIGNS, createGame, type GameState, type UnitInstance } from "./state";
+import { clampTrust, trustBand } from "./trust";
 
 // The operation layer (M1): a linked battle sequence with FULL CARRY-OVER
 // (owner ruling D1) and the Interlude between battles. Pure + serializable —
@@ -47,6 +49,8 @@ export interface OperationState {
   usedCallSigns: string[]; // includes the dead — a name is never reissued
   refitReport: string[]; // the commander's last Interlude report (legible)
   history: BattleRecord[];
+  trust: Record<string, number>; // call sign → 0..100 confidence in the support (D13)
+  trustNotes: string[]; // the last battle's trust ledger, in the commanders' words
 }
 
 export function operationDef(op: OperationState): OperationDef {
@@ -93,6 +97,8 @@ export function createOperation(defId: string, seed: number): OperationState {
   const mechSpots = mapById(def.battles[0].mapId).units.filter((p) => p.side === "blue" && unitType(p.type).cls === "mech");
   let signs = 0;
   const roster = mechSpots.map((p) => fullRecord(p.type, CALL_SIGNS[signs++ % CALL_SIGNS.length]));
+  const trust: Record<string, number> = {};
+  for (const r of roster) if (r.callSign) trust[r.callSign] = RULES.trust.start;
   return {
     defId,
     seed,
@@ -105,7 +111,24 @@ export function createOperation(defId: string, seed: number): OperationState {
     usedCallSigns: roster.filter((r) => r.callSign).map((r) => r.callSign!),
     refitReport: [],
     history: [],
+    trust,
+    trustNotes: [],
   };
+}
+
+// ── Trust (Horizon 2, ruling D13) ─────────────────────────────────────────────
+
+/** A call sign's current trust in the support (start value when unrecorded —
+ *  also covers checkpoints saved before trust existed). */
+export function trustOf(op: OperationState, callSign: string | undefined): number {
+  if (!callSign) return RULES.trust.start;
+  return op.trust?.[callSign] ?? RULES.trust.start;
+}
+
+function adjustTrust(op: OperationState, callSign: string, delta: number): number {
+  const now = clampTrust(trustOf(op, callSign) + delta);
+  op.trust = { ...(op.trust ?? {}), [callSign]: now };
+  return now;
 }
 
 // ── The Interlude (player provisioning + the commander's refit) ───────────────
@@ -175,6 +198,7 @@ export function requisitionMech(op: OperationState): { ok: boolean; reason?: str
   op.roster.push(fullRecord(typeId, sign));
   op.usedCallSigns.push(sign);
   op.stockpile = { ...op.stockpile, credits: op.stockpile.credits - def.mechPrice };
+  op.trust = { ...(op.trust ?? {}), [sign]: RULES.trust.start }; // a recruit arrives with no history
   return { ok: true, callSign: sign };
 }
 
@@ -265,7 +289,16 @@ export function commanderRefit(op: OperationState): string[] {
     }
     if (m.fuel < t.fuelMax) lines.push("REQUEST: more fuel");
 
-    report.push(`${name}: ${lines.length ? lines.join(" · ") : "combat ready"}`);
+    // Trust answers the refit (D13): every request the depot couldn't meet costs
+    // it; walking out combat ready earns it. The ledger is part of the report.
+    const requests = lines.filter((l) => l.startsWith("REQUEST")).length;
+    const delta = requests > 0 ? requests * RULES.trust.deltas.unmetRequest : RULES.trust.deltas.fullRefit;
+    let body = lines.length ? lines.join(" · ") : "combat ready";
+    if (m.callSign) {
+      const now = adjustTrust(op, m.callSign, delta);
+      body += ` · trust ${delta > 0 ? "+" : ""}${delta} → ${now} (${trustBand(now)})`;
+    }
+    report.push(`${name}: ${body}`);
   }
   return report;
 }
@@ -392,7 +425,10 @@ export function prepareBattle(op: OperationState): GameState {
     u.fuel = r.fuel;
     u.crits = [...r.crits];
     u.componentsLost = [...r.componentsLost];
-    if (r.callSign) u.callSign = r.callSign;
+    if (r.callSign) {
+      u.callSign = r.callSign;
+      u.trust = trustOf(op, r.callSign); // the operation's history rides into battle (D13)
+    }
     u.userRosterIndex = idx;
   }
   return state;
@@ -418,6 +454,34 @@ export function recordBattle(op: OperationState, state: GameState): void {
     r.committed = true; // it has fought — a veteran now (no disbanding, M2.6)
     recomputeCrits(r); // shaken doesn't follow you home
     if (!r.alive && r.callSign) mechsLost.push(r.callSign);
+  }
+
+  // The trust ledger (D13): each surviving mech scores THIS battle by what it
+  // lived — the outcome, the resupply runs that actually reached it, whether it
+  // ended starved, and the names that didn't come back. Legible, line by line.
+  const D = RULES.trust.deltas;
+  op.trustNotes = [];
+  for (const u of state.units) {
+    if (!u.callSign || u.side !== "blue" || u.userRosterIndex === undefined || u.structure <= 0) continue;
+    const t = unitType(u.typeId);
+    const why: string[] = [won ? "we won" : "we were repulsed"];
+    let delta = won ? D.win : D.loss;
+    const runs = state.events.filter((e) => e.kind === "resupply" && e.targetId === u.id).length;
+    if (runs > 0) {
+      delta += Math.min(runs * D.resupplyEach, D.resupplyCap);
+      why.push(`${runs} resupply ${runs === 1 ? "run" : "runs"} reached me`);
+    }
+    const starved = !u.inSupply || (t.weapons.length > 0 && u.ammo.every((a) => a === 0));
+    if (starved) {
+      delta += D.endedStarved;
+      why.push(!u.inSupply ? "I ended it cut off" : "I ended it dry");
+    }
+    if (mechsLost.length > 0) {
+      delta += mechsLost.length * D.mechLost;
+      why.push(`we lost ${mechsLost.join(", ")}`);
+    }
+    const now = adjustTrust(op, u.callSign, delta);
+    op.trustNotes.push(`${u.callSign}: trust ${delta > 0 ? "+" : ""}${delta} → ${now} (${trustBand(now)}) — ${why.join("; ")}`);
   }
 
   const award = won ? battle.award.win : battle.award.loss;

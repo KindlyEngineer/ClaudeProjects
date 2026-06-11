@@ -81,6 +81,30 @@ export const RULES = {
     interceptChance: 0.55,
   },
 
+  // Trust (Horizon 2, ruling D13): the commander's per-call-sign confidence in
+  // the SUPPORT — earned battle by battle from what the player actually
+  // delivered, never asserted. It bends the same utility weights temperament
+  // does: a WARY mech hedges (pays more for exposure, leans on the objective
+  // less); an ASSURED one commits, because the line behind it has held before.
+  // 0..100; skirmishes run neutral (no history, no grudge).
+  trust: {
+    start: 50,
+    waryBelow: 35, // trust under this → the mech hedges
+    assuredAbove: 65, // trust over this → the mech commits
+    wary: { exposure: 1.3, objective: 0.85 }, // weight multipliers, after temperament
+    assured: { exposure: 0.8, objective: 1.15 },
+    deltas: {
+      win: 8, // the plan worked
+      loss: -5, // it didn't
+      resupplyEach: 3, // each resupply run that actually reached this mech…
+      resupplyCap: 9, // …capped — trust is earned, not farmed
+      endedStarved: -10, // ended the battle cut off or bone dry
+      mechLost: -4, // a name died; the survivors remember
+      unmetRequest: -2, // per REQUEST the depot couldn't answer at refit
+      fullRefit: 2, // walked out of the Interlude combat ready
+    },
+  },
+
   // Mech commander utility AI (the player's influence surface). Thresholds below
   // which a mech needs to break contact; weights for scoring candidate moves.
   commander: {

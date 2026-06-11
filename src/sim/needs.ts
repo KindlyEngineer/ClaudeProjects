@@ -4,6 +4,7 @@ import { unitType } from "../data/units";
 import { assess, attackerShouldAssault } from "./assess";
 import { sustainmentNeed } from "./ai";
 import { temperamentOf } from "../data/temperaments";
+import { trustBand } from "./trust";
 import { hasCrit, livingUnits, unitLabel, type GameState } from "./state";
 
 // The commander's REQUESTS — the legibility surface the whole design rests on.
@@ -27,7 +28,10 @@ export function commanderNeeds(state: GameState, side: Side): CommanderNeed[] {
   if (state.deployPending) {
     for (const m of mechs) {
       const t = temperamentOf(m.callSign);
-      if (t) out.push({ urgency: "info", text: `${unitLabel(m)} (${t.name}): "${t.voice.deploy}"` });
+      // In operations the call sign's TRUST rides along (D13) — the band is
+      // part of the introduction. Skirmish mechs carry no history (no tag).
+      const tag = m.trust === undefined ? t?.name : `${t?.name} · ${trustBand(m.trust)}`;
+      if (t) out.push({ urgency: "info", text: `${unitLabel(m)} (${tag}): "${t.voice.deploy}"` });
     }
     return out;
   }
@@ -44,6 +48,9 @@ export function commanderNeeds(state: GameState, side: Side): CommanderNeed[] {
     }
     if (hasCrit(m, "shaken")) out.push({ urgency: "warn", text: `${name}'s crew is shaken — it can't fight until the pressure lifts` });
     if (hasCrit(m, "mobility")) out.push({ urgency: "warn", text: `${name} is immobilised — it will hold and return fire where it stands` });
+    // Trust speaks at the edges (D13) — and says exactly what it changes.
+    if (trustBand(m.trust) === "WARY") out.push({ urgency: "warn", text: `${name} doubts the support — it will hedge until your deliveries prove out` });
+    else if (trustBand(m.trust) === "ASSURED") out.push({ urgency: "info", text: `${name} trusts the line behind it — it will commit harder` });
   }
 
   // Force-level: what the commander is waiting on before it commits.

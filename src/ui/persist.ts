@@ -18,7 +18,11 @@ export function loadOperation(): OperationState | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as OperationState;
+    const op = JSON.parse(raw) as OperationState;
+    // Checkpoints saved before trust existed (Horizon 2, D13) load neutral.
+    op.trust = op.trust ?? {};
+    op.trustNotes = op.trustNotes ?? [];
+    return op;
   } catch {
     return null;
   }

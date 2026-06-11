@@ -436,6 +436,30 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
     Random ~60% ± seed variance. M3's temperaments and weather shifted several
     families coherently (methodical leads attack less recklessly unaided; rain
     punishes crossings) — verified intended, not drift.
+- **H2-TRUST — the trust system (Horizon 2 lead, ruling D13)** ✅
+  The relationship made mechanical: each call sign carries a 0..100 **trust in
+  the support**, earned from what the player actually delivered, never asserted.
+  - *The ledger* (`sim/operation.ts`): `recordBattle` scores each surviving mech's
+    battle from the event stream + end state — win/loss, resupply runs that
+    actually reached it (capped), ending cut off or bone dry, names that didn't
+    come back. `commanderRefit` answers too: −2 per unmet REQUEST, +2 for walking
+    out combat ready. Every change is a written line (`op.trustNotes`, and the
+    refit report itself) — the ledger is part of the prose.
+  - *The mechanism* (`sim/trust.ts` + `RULES.trust`): bands — **WARY** (<35)
+    hedges (exposure ×1.3, objective ×0.85), **STEADY**, **ASSURED** (>65)
+    commits (exposure ×0.8, objective ×1.15) — applied in `decideUnit` layered
+    after temperament, same legible weight machinery. Skirmish mechs carry no
+    trust value at all → STEADY (no history, no grudge); neutral-50 decides
+    byte-identically to no-value (tested).
+  - *Legibility*: deployment quotes carry the band (`Saber (Bold · WARY)`); the
+    needs panel warns at the edges and says exactly what changes; the Interlude
+    roster shows the number + band per mech; the refit report logs the deltas.
+  - *Persistence*: `OperationState.trust` rides the checkpoint save; pre-trust
+    saves load neutral; requisitioned recruits arrive at 50 (no history).
+  - Verified: 11 trust tests (bands, behavioral divergence on a defended
+    approach, ledger rise/fall, refit penalties, recruit neutrality, JSON
+    round-trip + injection, all three legibility surfaces) — 183 total, uitest
+    18/18, self-play 100×9 with 0 violations.
 
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 
