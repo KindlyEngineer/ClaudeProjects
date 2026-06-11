@@ -21,6 +21,7 @@ export type UnitClass =
   | "artillery"
   | "armor"
   | "aa" // air defence: contests off-map strikes (M2.5)
+  | "ew" // electronic warfare: jams enemy sensors, plants decoys in their belief (H2, D15)
   | "infantry"
   | "engineer"
   | "supply";
@@ -75,6 +76,7 @@ export interface UnitType {
   readonly weapons: readonly WeaponDef[];
   readonly components: readonly ComponentDef[]; // what crits can break (M2.5)
   readonly supplyCapacity?: number; // supply units only: resupply budget
+  readonly ewCharges?: number; // ew units only: decoys carried per battle (D15)
   readonly light: boolean; // acts in the recon/light initiative phase
 }
 

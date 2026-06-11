@@ -30,6 +30,7 @@ function mkUnit(typeId: string, hex: Hex, facing: Direction, side: "blue" | "red
     crits: [],
     componentsLost: [],
     supply: t.supplyCapacity ?? 0,
+    ewCharges: t.ewCharges ?? 0,
     movedThisTurn: false,
     actedThisTurn: false,
     reserved: false,

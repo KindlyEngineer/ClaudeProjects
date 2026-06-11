@@ -73,6 +73,7 @@ export const OPERATION_01: OperationDef = {
     { type: "armor", price: 60 },
     { type: "heavy_tank", price: 95 },
     { type: "aa_vehicle", price: 55 },
+    { type: "ew_vehicle", price: 65 },
     { type: "artillery", price: 70 },
     { type: "mortar_team", price: 40 },
     { type: "supply", price: 35 },

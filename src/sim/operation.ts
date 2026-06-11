@@ -405,6 +405,7 @@ export function prepareBattle(op: OperationState): GameState {
       crits: [...r.crits],
       componentsLost: [...r.componentsLost],
       supply: unitType(r.typeId).supplyCapacity ?? 0,
+      ewCharges: unitType(r.typeId).ewCharges ?? 0, // decoys recharge each battle (a consumable, like sorties)
       movedThisTurn: false,
       actedThisTurn: false,
       reserved: false,

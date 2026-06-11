@@ -6,7 +6,8 @@ import { buildFacingPicker, buildHexLabels, buildHexOverlay } from "../render/ov
 import { Stage, disposeGroup } from "../render/stage";
 import type { Side } from "../data/types";
 import { RULES } from "../data/rules";
-import { moveUnit, attackUnit, faceUnit, resupplyUnit, fireMission, fortifyHex, layMinefield, clearMinefield, canFireMission, confirmDeployment, deployUnit, missionArea, type MissionKind } from "../sim/actions";
+import { moveUnit, attackUnit, faceUnit, resupplyUnit, fireMission, fortifyHex, layMinefield, clearMinefield, canDeployDecoy, canFireMission, confirmDeployment, deployDecoy, deployUnit, missionArea, type MissionKind } from "../sim/actions";
+import { unitType } from "../data/units";
 import { commandForce, decideUnit } from "../sim/ai";
 import type { GameEvent } from "../sim/events";
 import { commanderNeeds } from "../sim/needs";
@@ -83,7 +84,7 @@ export function startInteractive(
   let inspectHex: Hex | null = null; // clicked empty ground → terrain inspection
   let notice: string | null = null; // why the last order didn't happen
   let playing = false; // event playback in progress → input parked
-  let targeting: MissionKind | "fortify" | "mine" | "clearmines" | "strike" | "airrecon" | null = null; // a verb awaiting a target
+  let targeting: MissionKind | "fortify" | "mine" | "clearmines" | "decoy" | "strike" | "airrecon" | null = null; // a verb awaiting a target
   let hoverHex: Hex | null = null; // for the mission-area preview
 
   // Deployment (M2.6, operation battles): the battle holds at the staging line
@@ -211,6 +212,9 @@ export function startInteractive(
         g.add(buildHexOverlay(state, mineTargets(state, sel), 0xc4734a, 0.4));
       } else if (sel && targeting === "clearmines") {
         g.add(buildHexOverlay(state, clearTargets(state, sel), 0x8eb07a, 0.45));
+      } else if (sel && targeting === "decoy") {
+        const hexes = state.map.cells.filter((c) => canDeployDecoy(state, sel, c.hex).ok).map((c) => c.hex);
+        g.add(buildHexOverlay(state, hexes, 0x9a7fc4, 0.3));
       } else if (targeting === "strike" && hoverHex) {
         const ok = canCallStrike(state, playerSide, hoverHex).ok;
         const area = state.map.cells.filter((c) => hexDistance(c.hex, hoverHex!) <= RULES.offmap.strike.radius).map((c) => c.hex);
@@ -247,6 +251,12 @@ export function startInteractive(
       if (f) supplyHexes.push(f.hex);
     }
     if (supplyHexes.length) g.add(buildHexOverlay(state, supplyHexes, 0x6a8e5d, 0.4));
+    // A selected EW unit shows its jam umbrella — the player should always see
+    // exactly what ground the suite is shielding (D15 legibility).
+    if (sel && unitType(sel.typeId).cls === "ew" && !sel.crits.includes("sensors")) {
+      const umbrella = state.map.cells.filter((c) => hexDistance(c.hex, sel.hex) <= RULES.ew.jamRadius).map((c) => c.hex);
+      g.add(buildHexOverlay(state, umbrella, 0x9a7fc4, 0.12));
+    }
     return g;
   }
 
@@ -298,6 +308,7 @@ export function startInteractive(
       else if (sel && targeting === "fortify") r = fortifyHex(state, sel, clickedHex);
       else if (sel && targeting === "mine") r = layMinefield(state, sel, clickedHex);
       else if (sel && targeting === "clearmines") r = clearMinefield(state, sel, clickedHex);
+      else if (sel && targeting === "decoy") r = deployDecoy(state, sel, clickedHex);
       else if (sel && (targeting === "suppress" || targeting === "smoke")) r = fireMission(state, sel, clickedHex, targeting);
       if (r?.ok) {
         targeting = null;
@@ -541,7 +552,9 @@ export function startInteractive(
           ? `${name(ev.id)} lays a minefield`
           : ev.effect === "minefield-cleared"
             ? `${name(ev.id)} breaches the minefield`
-            : `${name(ev.id)} fortifies the position`;
+            : ev.effect === "decoy"
+              ? `${name(ev.id)} projects a phantom signature into the enemy's picture`
+              : `${name(ev.id)} fortifies the position`;
     } else if (ev.kind === "mine") {
       text = `${name(ev.id)} strikes a mine — ${ev.destroyed ? '<span class="log-kill">DESTROYED</span>' : `<span class="log-pen">${ev.damage} dmg${ev.crit ? " · mobility out" : ""}</span>`}`;
     } else if (ev.kind === "offmap") {
@@ -657,6 +670,8 @@ export function startInteractive(
               ? "Click a highlighted hex to lay the minefield — Esc cancels"
               : targeting === "clearmines"
                 ? "Click the hostile field to breach — Esc cancels"
+                : targeting === "decoy"
+                  ? "Click a highlighted hex to project the phantom — Esc cancels"
             : targeting === "strike"
               ? "Click an OBSERVED hex to put the strike on — Esc cancels"
               : targeting === "airrecon"
@@ -697,7 +712,7 @@ export function startInteractive(
           refreshOverlays();
         });
       } else {
-        const enterTargeting = (t: MissionKind | "fortify" | "mine" | "clearmines" | "strike" | "airrecon") => () => {
+        const enterTargeting = (t: MissionKind | "fortify" | "mine" | "clearmines" | "decoy" | "strike" | "airrecon") => () => {
           targeting = t;
           notice = null;
           hoverHex = null;
@@ -717,6 +732,7 @@ export function startInteractive(
           if (sv.fortify) mkBtn("Fortify", "btn btn-alt", enterTargeting("fortify"));
           if (sv.mine) mkBtn("Mine", "btn btn-alt", enterTargeting("mine"));
           if (sv.clear) mkBtn("Breach", "btn btn-alt", enterTargeting("clearmines"));
+          if (sv.decoy) mkBtn(`Decoy ×${sel.ewCharges}`, "btn btn-alt", enterTargeting("decoy"));
           if (canReserve(state, sel)) {
             mkBtn("Reserve", "btn btn-alt", () => {
               sel.reserved = true;

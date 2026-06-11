@@ -477,6 +477,31 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
     it all (menu toggle added).
   - Verified: 3 vocabulary tests (186 total), uitest 18/18 incl. no page
     errors with the synth live, build clean.
+- **H2-EW — electronic warfare (ruling D15)** ✅
+  Attacks on the game's defining substrate — the belief map. One new unit, two
+  verbs, both through the SAME vision/belief machinery as everything else:
+  - *The unit* (`ew_vehicle`, cls `ew`): no weapons at all — its weapons are the
+    enemy's sensors and the enemy's picture. Light (recon phase), 2 decoy
+    charges per battle (a consumable, like sorties), `suite` component =
+    sensors effect: one crit silences it. AI escorts it like AA (mutual-heavy
+    weights); decoys are a PLAYER verb for now (AI use arrives with the
+    persistent-enemy slice — documented seam).
+  - *The jammer* (passive, `vision.jammedFor`): hexes within `RULES.ew.jamRadius`
+    of a living, suite-intact EW unit read to ENEMY sensors only at
+    burn-through range (3). Counterplay is built in: close in to burn through,
+    kill or crit the truck, or fly an overflight (air sees over jam).
+    Legibility: a selected EW unit always shows its umbrella overlay.
+  - *The decoy* (`actions.deployDecoy`): plants a phantom mech signature
+    (negative id) in the enemy belief — they position around it, pay exposure
+    for it, and can NEVER fire on it (`visibleNow` stays false); it's blown
+    the moment the hex is actually scouted (`updateBelief`) and ages out like
+    any memory. Emits a `build` event (`effect: "decoy"`) so log, float text
+    and audio ride existing rails.
+  - Hot-path discipline: `jammedFor` runs inside `canSee` — raw-array iteration,
+    no allocation; self-play timing unchanged (100×9, 0 violations).
+  - Verified: 7 EW tests (umbrella, burn-through, crit/kill restores sight,
+    own-side immunity, air-over-jam, phantom belief/no-fire/charges/range,
+    exposure shift, scout-dispel + decay) — 193 total, uitest 18/18, build clean.
 
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 

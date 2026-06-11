@@ -235,6 +235,26 @@ function aaModel(color: number): UnitModel {
   return { group: g, parts: { turret, muzzle } };
 }
 
+function ewModel(color: number): UnitModel {
+  const g = new THREE.Group();
+  const body = mat(color);
+  const dark = mat(DARK, 0.04);
+  g.add(wheels(dark, [-0.16, 0.16], 0.07, 0.16, 0.07, 0.05));
+  g.add(box(0.46, 0.14, 0.26, body, 0, 0.18, 0)); // boxy signals hull
+  g.add(box(0.24, 0.12, 0.22, body, -0.08, 0.31, 0)); // equipment shelter
+  const mast = cyl(0.01, 0.01, 0.42, mat(GUNMETAL, 0.05), -0.08, 0.55, 0); // the tall mast is the silhouette
+  g.add(mast);
+  const array = box(0.02, 0.1, 0.16, mat(0xb8d0e8, 0.3), -0.08, 0.74, 0); // antenna array
+  g.add(array);
+  const dish = box(0.08, 0.06, 0.02, mat(0xb8d0e8, 0.3), 0.1, 0.38, 0.08);
+  dish.rotation.y = -0.6;
+  g.add(dish);
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0.1, 0.3, 0);
+  g.add(muzzle);
+  return { group: g, parts: { muzzle } };
+}
+
 function supplyModel(color: number, heavy = false): UnitModel {
   const g = new THREE.Group();
   const body = mat(color);
@@ -261,6 +281,8 @@ export function buildUnitModel(typeId: string, side: Side): UnitModel {
       return typeId === "mortar_team" ? mortarModel(color) : artilleryModel(color);
     case "aa":
       return aaModel(color);
+    case "ew":
+      return ewModel(color);
     case "infantry":
       return infantryModel(color, false);
     case "engineer":
@@ -378,6 +400,7 @@ const ABBR: Record<UnitClass, string> = {
   recon: "R",
   artillery: "G",
   aa: "D",
+  ew: "W",
   infantry: "I",
   engineer: "E",
   supply: "S",

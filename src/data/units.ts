@@ -202,6 +202,27 @@ export const UNITS: Record<string, UnitType> = {
       { id: "crew", name: "Crew", effect: "crew" },
     ],
   },
+  // Electronic warfare (H2, D15): no gun at all — its weapons are the enemy's
+  // sensors (jam umbrella) and the enemy's belief map (decoy charges). Numbers
+  // in RULES.ew; resolution in sim/vision.ts (jam) and sim/actions.ts (decoys).
+  ew_vehicle: {
+    id: "ew_vehicle",
+    name: "EW Track",
+    cls: "ew",
+    armor: { front: 3, side: 2, rear: 2 },
+    structure: 9,
+    move: 5,
+    fuelMax: 30,
+    vision: 9,
+    light: true,
+    ewCharges: 2,
+    weapons: [],
+    components: [
+      { id: "suite", name: "EW suite", effect: "sensors" }, // the suite IS the weapon — break it and the unit goes quiet
+      { id: "tracks", name: "Drivetrain", effect: "mobility" },
+      { id: "crew", name: "Operators", effect: "crew" },
+    ],
+  },
   infantry: {
     id: "infantry",
     name: "Mech. Infantry",
