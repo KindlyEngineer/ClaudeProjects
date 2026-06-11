@@ -59,11 +59,25 @@ export const OPERATION_01: OperationDef = {
       award: { win: { credits: 100 }, loss: {} },
     },
   ],
-  initialStockpile: { ammo: 40, fuel: 80, repair: 40, strikes: 1, recon: 2, credits: 80 },
-  prices: {
-    mech: 150, // a requisition fields a fully NEW named entity — never a resurrection
-    support: { recon: 30, armor: 60, aa: 55, infantry: 25, engineer: 30, artillery: 70, supply: 35 },
-  },
+  // Generous starting credits: the player COMPOSES their support echelon from
+  // scratch (M2.6). Leftover rolls into the operation for reinforcement; awards
+  // top it up. The old default echelon cost ~250 — this affords that plus choice.
+  initialStockpile: { ammo: 40, fuel: 80, repair: 40, strikes: 1, recon: 2, credits: 340 },
+  mechPrice: 150,
+  supportCap: 8,
+  supportCatalog: [
+    { type: "recon", price: 30 },
+    { type: "infantry", price: 25 },
+    { type: "atgm_team", price: 45 },
+    { type: "engineer", price: 30 },
+    { type: "armor", price: 60 },
+    { type: "heavy_tank", price: 95 },
+    { type: "aa_vehicle", price: 55 },
+    { type: "artillery", price: 70 },
+    { type: "mortar_team", price: 40 },
+    { type: "supply", price: 35 },
+    { type: "heavy_supply", price: 60 },
+  ],
 };
 
 export const OPERATIONS: Record<string, OperationDef> = { op01: OPERATION_01 };

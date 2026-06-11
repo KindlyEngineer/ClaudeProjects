@@ -58,6 +58,8 @@ function mkState(seed: number, units: UnitInstance[]): GameState {
     skill: { blue: 1, red: 1 },
     offmap: { blue: { strike: 0, recon: 0 }, red: { strike: 0, recon: 0 } },
     airRecon: [],
+    deployZone: [],
+    deployPending: false,
   };
 }
 

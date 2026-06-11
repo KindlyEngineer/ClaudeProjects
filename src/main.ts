@@ -10,7 +10,7 @@ import { planForce } from "./sim/plan";
 import { decideUnit } from "./sim/ai";
 import { scriptedSkirmish } from "./sim/demo";
 import { noSupport, playerSupport, runMatch } from "./sim/match";
-import { createOperation, prepareBattle, type OperationState } from "./sim/operation";
+import { buySupport, createOperation, finishInterlude, prepareBattle, type OperationState } from "./sim/operation";
 import { unitType } from "./data/units";
 import { startInteractive } from "./ui/interactive";
 import { loadOperation } from "./ui/persist";
@@ -43,7 +43,7 @@ const setReady = (): void => {
 // ── DOM-only routes (no renderer) ────────────────────────────────────────────
 const opParam = params.get("op");
 const operation: OperationState | null = opParam ? loadOperation() : null;
-const battleParams = params.has("map") || params.has("battle") || params.has("scenario") || params.has("demo") || params.has("select");
+const battleParams = params.has("map") || params.has("battle") || params.has("scenario") || params.has("demo") || params.has("select") || params.has("deploydemo");
 
 if (params.has("opdemo")) {
   // Verification route: a mid-operation Interlude built in memory (battle one
@@ -54,8 +54,10 @@ if (params.has("opdemo")) {
   demo.history.push({ title: "Battle I — Ridge Approach", won: true, turns: 11, mechsLost: [] });
   const mech = demo.roster.find((r) => r.callSign)!;
   mech.structure = 12;
+  mech.componentsLost = ["sensors"];
   mech.crits = ["sensors"];
-  demo.roster.find((r) => r.typeId === "recon")!.alive = false;
+  for (const t of ["recon", "artillery", "supply"]) buySupport(demo, t);
+  demo.roster.find((r) => r.typeId === "recon")!.committed = true; // a veteran — no disbanding
   renderInterlude(document.body, demo);
   setReady();
 } else if (!battleParams && !params.has("interlude") && !opParam) {
@@ -85,7 +87,13 @@ function bootBattle(op: OperationState | null): void {
   const view = createView(container!);
 
   let state: GameState;
-  if (op) {
+  if (params.has("deploydemo")) {
+    // Verification route: an operation battle held at the deployment line.
+    const demo = createOperation("op01", 7);
+    for (const t of ["recon", "artillery", "supply", "engineer", "mortar_team"]) buySupport(demo, t);
+    finishInterlude(demo);
+    state = prepareBattle(demo);
+  } else if (op) {
     state = prepareBattle(op); // the operation's carry-over does the casting
   } else {
     const mapParam = params.get("map");

@@ -1,14 +1,17 @@
 import { describe, it, expect } from "vitest";
 import {
   assignSorties,
+  buySupport,
   commanderRefit,
   createOperation,
+  disbandSupport,
   finishInterlude,
+  operationDef,
   prepareBattle,
   recordBattle,
   requisitionMech,
-  requisitionSupport,
   spendOnSupport,
+  supportCount,
   type OperationState,
 } from "../src/sim/operation";
 import { unitType } from "../src/data/units";
@@ -18,16 +21,47 @@ import { unitLabel } from "../src/sim/state";
 // never-task split, permanent mech death + differentiated requisitions, and
 // failure-forward defeat. All pure and JSON-serializable (the checkpoint save).
 
-const fresh = (): OperationState => createOperation("op01", 7);
+const fresh = (): OperationState => {
+  const op = createOperation("op01", 7);
+  // Compose a small echelon (M2.6 — the roster starts as the commander's mechs
+  // only; the player BUYS the support force).
+  for (const typeId of ["recon", "artillery", "supply"]) buySupport(op, typeId);
+  return op;
+};
 
 describe("operation lifecycle", () => {
-  it("starts at the staging Interlude with a full named roster", () => {
-    const op = fresh();
+  it("starts at the staging Interlude: named mechs fixed, support COMPOSED", () => {
+    const op = createOperation("op01", 7);
     expect(op.phase).toBe("interlude");
-    expect(op.battleIndex).toBe(0);
     const mechs = op.roster.filter((r) => unitType(r.typeId).cls === "mech");
     expect(mechs.length).toBeGreaterThan(0);
     expect(mechs.every((m) => m.callSign)).toBe(true);
+    expect(supportCount(op)).toBe(0); // the echelon is the player's to build
+
+    const credits0 = op.stockpile.credits;
+    expect(buySupport(op, "supply").ok).toBe(true);
+    expect(supportCount(op)).toBe(1);
+    expect(op.stockpile.credits).toBeLessThan(credits0);
+    expect(buySupport(op, "battle_blimp").reason).toBe("not in the catalog");
+
+    // The cap is hard.
+    const def = operationDef(op);
+    op.stockpile = { ...op.stockpile, credits: 9999 };
+    while (supportCount(op) < def.supportCap) expect(buySupport(op, "infantry").ok).toBe(true);
+    expect(buySupport(op, "infantry").reason).toContain("force cap");
+  });
+
+  it("un-fought purchases disband for a full refund; veterans never do", () => {
+    const op = createOperation("op01", 7);
+    buySupport(op, "armor");
+    const credits = op.stockpile.credits;
+    const idx = op.roster.findIndex((r) => r.typeId === "armor");
+    expect(disbandSupport(op, idx).ok).toBe(true);
+    expect(op.stockpile.credits).toBeGreaterThan(credits); // refunded
+    buySupport(op, "armor");
+    const idx2 = op.roster.findIndex((r) => r.typeId === "armor");
+    op.roster[idx2].committed = true; // it fought
+    expect(disbandSupport(op, idx2).reason).toBe("veterans are not disbanded");
   });
 
   it("carries battle damage forward and the dead stay dead", () => {
@@ -61,6 +95,8 @@ describe("operation lifecycle", () => {
     expect(next.units.some((u) => u.side === "blue" && u.typeId === "supply")).toBe(false);
     const carried = next.units.find((u) => u.callSign === mech.callSign)!;
     expect(carried.structure).toBe(9); // the depot was empty — it fights hurt
+    expect(next.deployPending).toBe(true); // and the echelon awaits placement
+    expect(next.deployZone.length).toBeGreaterThan(0);
   });
 
   it("the commander refits its mechs from the depot, legibly, and reports shortfalls", () => {
@@ -115,12 +151,13 @@ describe("operation lifecycle", () => {
     expect(fielded.some((u) => unitLabel(u) === deadSign)).toBe(false);
   });
 
-  it("dead support is replaceable at cost; sorties assign into the next battle", () => {
+  it("losses free cap space to buy back into; sorties assign into the next battle", () => {
     const op = fresh();
+    const before = supportCount(op);
     const truckIdx = op.roster.findIndex((r) => r.typeId === "supply");
-    op.roster[truckIdx].alive = false;
-    expect(requisitionSupport(op, truckIdx).ok).toBe(true);
-    expect(op.roster[truckIdx].alive).toBe(true);
+    op.roster[truckIdx].alive = false; // lost in action
+    expect(supportCount(op)).toBe(before - 1); // the dead don't count against the cap
+    expect(buySupport(op, "heavy_supply").ok).toBe(true); // reinforce into the hole
 
     expect(assignSorties(op, 1, 2).ok).toBe(true);
     expect(op.stockpile.strikes).toBe(0);

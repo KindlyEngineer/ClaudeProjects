@@ -374,6 +374,24 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
     carry-over/repair-by-name, AA intercept both paths, new-type soundness);
     self-play NINE scenarios, 0 invariant violations; 18 e2e checks green.
 
+- **M2.6 — Force composition + deployment (owner progression shift)** ✅
+  - The roster now starts as the COMMANDER's mechs only; the player **composes
+    the support echelon** from an eleven-type catalog (credits + hard cap of 8,
+    rulings D9/D10): `buySupport`/`disbandSupport` (un-fought purchases refund;
+    veterans — anything that has fought — never disband), reinforcement at any
+    Interlude into holes the battles tear. Interlude gains the FORCE
+    COMPOSITION strip; the dead-slot "replace" flow is gone (buy into the gap).
+  - **Deployment (D11)**: each operation battle opens at the staging line —
+    `prepareBattle` spawns the composed echelon into a deployment zone
+    (authored per map or derived: home band attacking / objective's
+    neighbourhood defending) with `deployPending`; the player repositions
+    freely under fog (`deployUnit`/`confirmDeployment` in the action API,
+    free — no fuel, no events) and CONFIRMS to start turn one (upkeep runs
+    from the chosen positions). Skirmishes keep authored positions.
+  - Verification: 166 vitest tests (composition cap/refund/veteran-lock, zone
+    derivation both seats, placement validation, skirmish exemption);
+    `?deploydemo`/`?opdemo` verification routes; 18 e2e checks green.
+
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 
 Per the owner: the AI must (a) never behave tactically/logically unsoundly for

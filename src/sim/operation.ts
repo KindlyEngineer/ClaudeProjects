@@ -1,6 +1,8 @@
 import { mapById, OPERATIONS } from "../data/operations";
-import type { OperationDef, Stockpile, UnitPlacement } from "../data/types";
+import { terrain } from "../data/terrain";
+import type { MapDef, OperationDef, Stockpile, UnitPlacement } from "../data/types";
 import { unitType } from "../data/units";
+import { hexDistance, hexKey, type Hex } from "./hex";
 import { CALL_SIGNS, createGame, type GameState, type UnitInstance } from "./state";
 
 // The operation layer (M1): a linked battle sequence with FULL CARRY-OVER
@@ -23,6 +25,7 @@ export interface UnitRecord {
   fuel: number;
   crits: string[];
   componentsLost: string[]; // M2.5 — damage is component-deep across battles
+  committed?: boolean; // M2.6 — has fought a battle (a veteran can't be disbanded)
 }
 
 export interface BattleRecord {
@@ -81,16 +84,15 @@ function recomputeCrits(r: UnitRecord): void {
   r.crits = crits;
 }
 
-/** Start an operation: the roster is battle 1's blue force at full strength,
- *  and the player begins at the STAGING Interlude (allocate before fighting). */
+/** Start an operation: the roster holds the COMMANDER's mechs (fixed by the
+ *  operation); the player COMPOSES the support echelon from scratch in the
+ *  staging Interlude (M2.6 — credits + cap), then deploys it each battle. */
 export function createOperation(defId: string, seed: number): OperationState {
   const def = OPERATIONS[defId];
   if (!def) throw new Error(`unknown operation '${defId}'`);
-  const blue = mapById(def.battles[0].mapId).units.filter((p) => p.side === "blue");
+  const mechSpots = mapById(def.battles[0].mapId).units.filter((p) => p.side === "blue" && unitType(p.type).cls === "mech");
   let signs = 0;
-  const roster = blue.map((p) =>
-    fullRecord(p.type, unitType(p.type).cls === "mech" ? CALL_SIGNS[signs++ % CALL_SIGNS.length] : undefined),
-  );
+  const roster = mechSpots.map((p) => fullRecord(p.type, CALL_SIGNS[signs++ % CALL_SIGNS.length]));
   return {
     defId,
     seed,
@@ -163,7 +165,7 @@ export function assignSorties(op: OperationState, strike: number, recon: number)
  *  class the force now lacks most. High cost by design. */
 export function requisitionMech(op: OperationState): { ok: boolean; reason?: string; callSign?: string } {
   const def = operationDef(op);
-  if (op.stockpile.credits < def.prices.mech) return { ok: false, reason: "not enough credits" };
+  if (op.stockpile.credits < def.mechPrice) return { ok: false, reason: "not enough credits" };
   const sign = CALL_SIGNS.find((c) => !op.usedCallSigns.includes(c));
   if (!sign) return { ok: false, reason: "no call signs left" };
   const living = op.roster.filter((r) => r.alive && unitType(r.typeId).cls === "mech");
@@ -172,20 +174,44 @@ export function requisitionMech(op: OperationState): { ok: boolean; reason?: str
   const typeId = pool[counts.indexOf(Math.min(...counts))]; // fill the thinnest role
   op.roster.push(fullRecord(typeId, sign));
   op.usedCallSigns.push(sign);
-  op.stockpile = { ...op.stockpile, credits: op.stockpile.credits - def.prices.mech };
+  op.stockpile = { ...op.stockpile, credits: op.stockpile.credits - def.mechPrice };
   return { ok: true, callSign: sign };
 }
 
-/** Replace a DESTROYED support vehicle of the same type (fresh crew, full state). */
-export function requisitionSupport(op: OperationState, rosterIndex: number): { ok: boolean; reason?: string } {
+// ── Force composition (M2.6 — compose once, reinforce after) ──────────────────
+
+/** Living player-controlled support units on the books (the cap counts these). */
+export function supportCount(op: OperationState): number {
+  return op.roster.filter((r) => r.alive && unitType(r.typeId).cls !== "mech").length;
+}
+
+export function catalogPrice(op: OperationState, typeId: string): number | undefined {
+  return operationDef(op).supportCatalog.find((c) => c.type === typeId)?.price;
+}
+
+/** BUY a support unit from the operation's catalog into the echelon (staging
+ *  composition and later reinforcement use the same verb). Credits + hard cap. */
+export function buySupport(op: OperationState, typeId: string): { ok: boolean; reason?: string } {
   const def = operationDef(op);
-  const r = op.roster[rosterIndex];
-  if (!r || r.alive) return { ok: false, reason: "nothing to replace" };
-  if (unitType(r.typeId).cls === "mech") return { ok: false, reason: "mech losses are permanent" };
-  const price = def.prices.support[unitType(r.typeId).cls] ?? 999;
+  const price = catalogPrice(op, typeId);
+  if (price === undefined) return { ok: false, reason: "not in the catalog" };
+  if (supportCount(op) >= def.supportCap) return { ok: false, reason: `force cap reached (${def.supportCap})` };
   if (op.stockpile.credits < price) return { ok: false, reason: "not enough credits" };
-  Object.assign(r, fullRecord(r.typeId));
+  op.roster.push(fullRecord(typeId));
   op.stockpile = { ...op.stockpile, credits: op.stockpile.credits - price };
+  return { ok: true };
+}
+
+/** DISBAND an un-fought purchase for a full refund. Veterans (any unit that has
+ *  seen a battle) can't be disbanded — they're yours now. */
+export function disbandSupport(op: OperationState, rosterIndex: number): { ok: boolean; reason?: string } {
+  const r = op.roster[rosterIndex];
+  if (!r || !r.alive) return { ok: false, reason: "no such unit" };
+  if (unitType(r.typeId).cls === "mech") return { ok: false, reason: "the mechs are not yours to dismiss" };
+  if (r.committed) return { ok: false, reason: "veterans are not disbanded" };
+  const price = catalogPrice(op, r.typeId) ?? 0;
+  op.roster.splice(rosterIndex, 1);
+  op.stockpile = { ...op.stockpile, credits: op.stockpile.credits + price };
   return { ok: true };
 }
 
@@ -253,9 +279,26 @@ export function finishInterlude(op: OperationState): void {
 
 // ── Battle preparation + recording (the carry-over itself) ────────────────────
 
-/** Build the next battle's GameState with the roster's carried state injected.
- *  Dead units leave EMPTY SLOTS; a requisitioned replacement takes a vacant
- *  mech slot (same ID for determinism, its own name and chassis). */
+/** The player's DEPLOYMENT ZONE for a battle (M2.6): the map's authored zone if
+ *  present, else derived — the home band when blue attacks, the objective's
+ *  neighbourhood when blue defends. Passable hexes only. */
+export function deriveDeployZone(map: MapDef): Hex[] {
+  if (map.deployZone) return map.deployZone.map((h) => ({ ...h }));
+  const passable = map.cells.filter((c) => Number.isFinite(terrain(c.terrain).moveCost));
+  if (map.objective.attacker === "blue") {
+    const minQ = Math.min(...map.cells.map((c) => c.hex.q));
+    return passable.filter((c) => c.hex.q <= minQ + 3).map((c) => ({ ...c.hex }));
+  }
+  const zone = map.objective.zone;
+  const cq = Math.round(zone.reduce((s, h) => s + h.q, 0) / Math.max(1, zone.length));
+  const cr = Math.round(zone.reduce((s, h) => s + h.r, 0) / Math.max(1, zone.length));
+  return passable.filter((c) => hexDistance(c.hex, { q: cq, r: cr }) <= 4).map((c) => ({ ...c.hex }));
+}
+
+/** Build the next battle's GameState (M2.6 shape): the COMMANDER's mechs take
+ *  the map's mech slots (carry-over + replacements as before); the player's
+ *  COMPOSED echelon spawns into the deployment zone at default positions, with
+ *  `deployPending` set so the UI runs the placement step before turn one. */
 export function prepareBattle(op: OperationState): GameState {
   const def = operationDef(op);
   const battle = def.battles[op.battleIndex];
@@ -268,41 +311,78 @@ export function prepareBattle(op: OperationState): GameState {
     red: map.offmap?.red ?? {},
   };
   op.nextOffmap = { strike: 0, recon: 0 }; // assigned sorties fly this battle or not at all
-  const state = createGame({ ...map, offmap }, op.seed * 31 + op.battleIndex + 1);
+  // Blue keeps only its MECH slots from the map — the support echelon is the
+  // player's composition, not the scenario author's.
+  const units = map.units.filter((p) => p.side !== "blue" || unitType(p.type).cls === "mech");
+  const state = createGame({ ...map, offmap, units }, op.seed * 31 + op.battleIndex + 1);
 
-  // Match state's blue units (placement order) to living roster records:
-  // same-type first, then replacements (different chassis) into vacant slots.
-  const blue = state.units.filter((u) => u.side === "blue");
-  const unmatchedUnits: UnitInstance[] = [];
+  // Mech slots ← living mech records: same-type first, replacements after.
+  const blueMechs = state.units.filter((u) => u.side === "blue");
+  const unmatched: UnitInstance[] = [];
   const used = new Set<number>();
   const matchOf = new Map<number, number>(); // unit id → roster index
-  for (const u of blue) {
+  for (const u of blueMechs) {
     const idx = op.roster.findIndex((r, i) => !used.has(i) && r.alive && r.typeId === u.typeId);
     if (idx >= 0) {
       used.add(idx);
       matchOf.set(u.id, idx);
-    } else unmatchedUnits.push(u);
+    } else unmatched.push(u);
   }
   const spareMechs = op.roster
     .map((r, i) => ({ r, i }))
     .filter(({ r, i }) => !used.has(i) && r.alive && unitType(r.typeId).cls === "mech");
-  for (const u of unmatchedUnits.slice()) {
-    if (unitType(u.typeId).cls !== "mech" || spareMechs.length === 0) continue;
+  for (const u of unmatched.slice()) {
+    if (spareMechs.length === 0) break;
     const { r, i } = spareMechs.shift()!;
     used.add(i);
-    // A replacement chassis takes the vacant slot: same id/hex/facing, new type.
-    const t = unitType(r.typeId);
+    const t = unitType(r.typeId); // a replacement chassis takes the vacant slot
     u.typeId = r.typeId;
     u.structure = t.structure;
     u.ammo = t.weapons.map((w) => w.ammoMax);
     u.fuel = t.fuelMax;
     matchOf.set(u.id, i);
-    unmatchedUnits.splice(unmatchedUnits.indexOf(u), 1);
+    unmatched.splice(unmatched.indexOf(u), 1);
   }
-  // Vacant slots with nobody to fill them: the dead stay dead.
-  state.units = state.units.filter((u) => u.side !== "blue" || !unmatchedUnits.includes(u));
+  state.units = state.units.filter((u) => u.side !== "blue" || !unmatched.includes(u));
 
-  // Carry the records onto the survivors.
+  // The composed echelon spawns into the deployment zone (default spread; the
+  // player repositions before turn one).
+  const zone = deriveDeployZone(map);
+  state.deployZone = zone.map((h) => ({ ...h }));
+  state.deployPending = true;
+  const taken = new Set(state.units.filter((u) => u.structure > 0).map((u) => hexKey(u.hex)));
+  const spots = zone.filter((h) => !taken.has(hexKey(h))).sort((a, b) => (hexKey(a) < hexKey(b) ? -1 : 1));
+  let nextId = Math.max(0, ...state.units.map((u) => u.id)) + 1;
+  const facing = map.objective.attacker === "blue" ? 0 : 0; // blue faces east either way (red home = max q)
+  op.roster.forEach((r, idx) => {
+    if (!r.alive || unitType(r.typeId).cls === "mech") return;
+    const hex = spots.shift();
+    if (!hex) return; // a full zone shelves the overflow — the cap keeps this theoretical
+    state.units.push({
+      id: nextId++,
+      typeId: r.typeId,
+      side: "blue",
+      controller: "player",
+      hex: { ...hex },
+      facing,
+      structure: r.structure,
+      ammo: [...r.ammo],
+      fuel: r.fuel,
+      suppression: 0,
+      crits: [...r.crits],
+      componentsLost: [...r.componentsLost],
+      supply: unitType(r.typeId).supplyCapacity ?? 0,
+      movedThisTurn: false,
+      actedThisTurn: false,
+      reserved: false,
+      inSupply: true,
+      dryTurns: 0,
+      userRosterIndex: idx,
+    });
+    taken.add(hexKey(hex));
+  });
+
+  // Carry the records onto the fielded mechs.
   for (const u of state.units) {
     const idx = matchOf.get(u.id);
     if (idx === undefined) continue;
@@ -335,6 +415,7 @@ export function recordBattle(op: OperationState, state: GameState): void {
     r.ammo = [...u.ammo];
     r.fuel = u.fuel;
     r.componentsLost = [...u.componentsLost];
+    r.committed = true; // it has fought — a veteran now (no disbanding, M2.6)
     recomputeCrits(r); // shaken doesn't follow you home
     if (!r.alive && r.callSign) mechsLost.push(r.callSign);
   }

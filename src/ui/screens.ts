@@ -3,12 +3,14 @@ import { unitType } from "../data/units";
 import type { GameEvent } from "../sim/events";
 import {
   assignSorties,
+  buySupport,
   createOperation,
+  disbandSupport,
   finishInterlude,
   operationDef,
   requisitionMech,
-  requisitionSupport,
   spendOnSupport,
+  supportCount,
   type OperationState,
 } from "../sim/operation";
 import type { GameState } from "../sim/state";
@@ -149,10 +151,9 @@ export function renderInterlude(root: HTMLElement, op: OperationState): void {
         row.appendChild(btn("+10 fuel", "btn tiny", () => (spendOnSupport(op, i, { fuel: 10 }), save(), render())));
         card.appendChild(row);
       }
-      if (!r.alive && !isMech) {
-        const price = def.prices.support[t.cls] ?? 0;
+      if (r.alive && !isMech && !r.committed) {
         card.appendChild(
-          btn(`Replace (${price} cr)`, "btn tiny btn-alt", () => (requisitionSupport(op, i), save(), render())),
+          btn("Disband (full refund)", "btn tiny ghost", () => (disbandSupport(op, i), save(), render())),
         );
       }
       if (isMech && r.alive) card.appendChild(el("div", "hint", "Refitted by the commander, from the depot."));
@@ -160,12 +161,29 @@ export function renderInterlude(root: HTMLElement, op: OperationState): void {
     });
     screen.appendChild(grid);
 
+    // FORCE COMPOSITION (M2.6): buy the echelon you mean to fight with —
+    // credits + a hard cap. Survivors carry over; only un-fought purchases
+    // can be disbanded. Lost units simply leave a hole to buy into.
+    const compose = el("div", "interlude-row compose");
+    compose.appendChild(
+      el("div", "hint compose-head", `FORCE COMPOSITION — ${supportCount(op)}/${def.supportCap} support units fielded`),
+    );
+    for (const entry of def.supportCatalog) {
+      const t2 = unitType(entry.type);
+      const full = supportCount(op) >= def.supportCap;
+      const broke = op.stockpile.credits < entry.price;
+      const b = btn(`+ ${t2.name} (${entry.price} cr)`, "btn tiny btn-alt", () => (buySupport(op, entry.type), save(), render()));
+      if (full || broke) (b as HTMLButtonElement).disabled = true, b.classList.add("btn-off");
+      compose.appendChild(b);
+    }
+    screen.appendChild(compose);
+
     // Requisitions + sortie assignment.
     const ops = el("div", "interlude-row");
     const mechSlots = op.roster.filter((r) => unitType(r.typeId).cls === "mech");
     if (mechSlots.some((r) => !r.alive)) {
       ops.appendChild(
-        btn(`Requisition a new mech (${def.prices.mech} cr)`, "btn btn-alt", () => {
+        btn(`Requisition a new mech (${def.mechPrice} cr)`, "btn btn-alt", () => {
           const r = requisitionMech(op);
           if (r.ok) (save(), render());
         }),

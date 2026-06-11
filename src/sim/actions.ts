@@ -114,6 +114,33 @@ export function faceUnit(state: GameState, unit: UnitInstance, facing: Direction
   return { moved: true, cost: 0 };
 }
 
+
+// ── Pre-battle deployment (M2.6 — operations only) ────────────────────────────
+
+/** May the player place `unit` on `target` during deployment? Free placement
+ *  inside the zone — no fuel, no MP, no events; the battle hasn't started. */
+export function canDeploy(state: GameState, unit: UnitInstance, target: Hex): { ok: boolean; reason?: string } {
+  if (!state.deployPending) return { ok: false, reason: "not in deployment" };
+  if (unit.controller !== "player") return { ok: false, reason: "the commander posts its own mechs" };
+  if (!state.deployZone.some((h) => h.q === target.q && h.r === target.r)) return { ok: false, reason: "outside the deployment zone" };
+  if (!Number.isFinite(moveCostAt(state, target))) return { ok: false, reason: "impassable ground" };
+  if (occupant(state, target, unit.id)) return { ok: false, reason: "occupied" };
+  return { ok: true };
+}
+
+export function deployUnit(state: GameState, unit: UnitInstance, target: Hex, facing?: Direction): { ok: boolean; reason?: string } {
+  const gate = canDeploy(state, unit, target);
+  if (!gate.ok) return gate;
+  unit.hex = { ...target };
+  if (facing !== undefined) unit.facing = facing;
+  return { ok: true };
+}
+
+/** Lock the deployment in: the battle begins. */
+export function confirmDeployment(state: GameState): void {
+  state.deployPending = false;
+}
+
 const NO_FIRE: AttackResult = {
   fired: false,
   hit: false,
