@@ -29,6 +29,11 @@ jobs:
       - run: npm test
       - run: npm run build
       - uses: actions/configure-pages@v5
+        with:
+          # Create/enable the Pages site if the repo doesn't have one yet —
+          # without this, the first deploy on a fresh repo fails with
+          # "Get Pages site failed: Not Found" (runs 1-7 did exactly that).
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
