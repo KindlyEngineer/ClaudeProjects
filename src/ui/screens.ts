@@ -92,6 +92,12 @@ export function renderMenu(root: HTMLElement): void {
     speedBtn.textContent = `Animation: ${ANIM_LABEL[String(next)]}`;
   });
   settingsRow.appendChild(speedBtn);
+  const audioBtn = btn(`Audio: ${getSettings().audio ? "On" : "Off"}`, "btn tiny", () => {
+    const next = !getSettings().audio;
+    updateSettings({ audio: next });
+    audioBtn.textContent = `Audio: ${next ? "On" : "Off"}`;
+  });
+  settingsRow.appendChild(audioBtn);
   settingsRow.appendChild(btn("How to play", "btn tiny", () => root.appendChild(buildHelp())));
   screen.appendChild(settingsRow);
 
@@ -118,7 +124,7 @@ export function buildHelp(): HTMLElement {
     <div class="help-line"><b>Turns</b> — recon, then fires, then maneuver. END PHASE hands the field to both AIs. RESERVE holds a unit to act later.</div>
     <div class="help-line"><b>The commander panel</b> (top-left) is the mechs talking to you: feed what they ask for and they fight better. Each call sign has its own temperament — and, in operations, a TRUST in your support, earned battle by battle. A WARY mech hedges; an ASSURED one commits.</div>
     <div class="help-line"><b>Operations</b> — compose your echelon (credits + cap), deploy it in the zone, fight, then the Interlude: provision your units; whatever you LEAVE in the depot is what the commander refits its mechs from. Mech death is permanent.</div>
-    <div class="help-line"><b>Camera</b> — right-drag pans, wheel zooms. Esc backs out of anything.</div>`;
+    <div class="help-line"><b>Camera & sound</b> — right-drag pans, wheel zooms. Esc backs out of anything. The audio is synthesized live (toggle it on the title screen) and follows the fog: you hear what you're allowed to see.</div>`;
   box.appendChild(btn("Close", "btn", () => wrap.remove()));
   wrap.appendChild(box);
   wrap.addEventListener("click", (e) => { if (e.target === wrap) wrap.remove(); });

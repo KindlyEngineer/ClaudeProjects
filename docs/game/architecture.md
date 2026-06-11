@@ -460,6 +460,23 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
     approach, ledger rise/fall, refit penalties, recruit neutrality, JSON
     round-trip + injection, all three legibility surfaces) — 183 total, uitest
     18/18, self-play 100×9 with 0 violations.
+- **H2-AUDIO — procedural audio (ruling D14, brief amended)** ✅
+  Everything synthesized in Web Audio at call time (`ui/audio.ts`) — oscillators,
+  filtered noise, gain envelopes. **No assets, no files, no pipeline.**
+  - *The seam*: `soundIdFor(event)` is a PURE event→sound vocabulary (crack /
+    thump / boom / bigboom / barrage / hiss / whoosh / tick / clink / blip),
+    unit-tested headlessly; `playSound` is the only impure edge. Playback rides
+    the SAME fog-gated event stream as animation and the log (one line in the
+    playback loop) — you hear exactly what you're allowed to see, plus the
+    always-loud (artillery, air, the turn radio).
+  - *Ambient weather*: rain = low-passed noise loop; night = band-passed wind
+    breathing on an LFO; clear = silence. Started with the battle, gone with it.
+  - *Discipline*: render-side only (the sim never knows sound exists); context
+    unlocks on the first gesture (autoplay policy); every synth call is
+    guarded — a hiccup never takes the game down; the M4 settings mute gates
+    it all (menu toggle added).
+  - Verified: 3 vocabulary tests (186 total), uitest 18/18 incl. no page
+    errors with the synth live, build clean.
 
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 
