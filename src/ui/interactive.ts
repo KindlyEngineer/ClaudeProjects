@@ -104,14 +104,72 @@ export function startInteractive(
   const needsEl = ensure("needs");
   const hudEl = document.getElementById("hud");
 
+  // The COMMS column (owner UX ruling): every voice lives OUTSIDE the play
+  // area — a docked right-hand column the canvas never renders under. Top:
+  // the live commander requests (the snapshot the AI acts on). Below: the
+  // scrolling transcript, Speaker — Content, keeping every old message.
+  document.body.classList.add("with-comms");
+  const commsEl = ensure("comms");
+  commsEl.replaceChildren();
+  const commsHead = document.createElement("div");
+  commsHead.className = "comms-head";
+  commsHead.textContent = "COMMS — THE COMMANDER'S NET";
+  commsEl.appendChild(commsHead);
+  commsEl.appendChild(needsEl); // reparent the snapshot panel into the column
+  const feedEl = document.createElement("div");
+  feedEl.id = "commsfeed";
+  commsEl.appendChild(feedEl);
+
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
 
-  // The persistent animated scene.
+  // The persistent animated scene (sized to the board area BESIDE the column).
   const stage = new Stage(state);
+  view.resize();
   view.scene.add(stage.group);
   view.frame(stage.bounds.min, stage.bounds.max);
   let overlayGroup: THREE.Group | null = null;
+
+  // The transcript: append-only, deduped per turn, turn-stamped. Old traffic
+  // scrolls up; nothing is ever painted over the hexes.
+  const commsSeen = new Set<string>();
+  let commsTurn = -1;
+  function pushComms(speaker: string, content: string, warn = false): void {
+    const key = `${state.turn}|${speaker}|${content}`;
+    if (commsSeen.has(key)) return;
+    commsSeen.add(key);
+    if (state.turn !== commsTurn) {
+      commsTurn = state.turn;
+      const sep = document.createElement("div");
+      sep.className = "comms-turn";
+      sep.textContent = `— Turn ${state.turn} —`;
+      feedEl.appendChild(sep);
+    }
+    const line = document.createElement("div");
+    line.className = warn ? "comms-line comms-warn" : "comms-line";
+    const who = document.createElement("span");
+    who.className = "who";
+    who.textContent = speaker;
+    line.appendChild(who);
+    line.appendChild(document.createTextNode(` — ${content}`));
+    feedEl.appendChild(line);
+    feedEl.scrollTop = feedEl.scrollHeight;
+  }
+
+  /** New radio traffic since the last refresh: needs lines and the player-side
+   *  mechs' intent changes (fog-honest — only your own net is audible). */
+  const lastIntent = new Map<number, string>();
+  function updateComms(): void {
+    for (const n of commanderNeeds(state, playerSide)) pushComms(n.speaker, n.content, n.urgency === "warn");
+    for (const u of livingUnits(state, playerSide)) {
+      if (u.controller !== "ai" || unitType(u.typeId).cls !== "mech") continue;
+      const intent = state.intents[u.id];
+      if (intent && lastIntent.get(u.id) !== intent) {
+        lastIntent.set(u.id, intent);
+        pushComms(unitLabel(u), intent);
+      }
+    }
+  }
 
   // Audio (D14): the context unlocks on the first gesture (autoplay policy);
   // the weather is audible the moment it may be (rain on the hull, night wind).
@@ -123,10 +181,14 @@ export function startInteractive(
   let cursor = 0;
   const logLines: string[] = [];
   // An operation battle opens with the commander's Interlude refit report — what
-  // it took from the depot and what it still wants.
+  // it took from the depot and what it still wants. It's dialogue, so it opens
+  // the COMMS transcript (the combat log stays a record of actions).
   if (opts.operation?.refitReport.length) {
-    logLines.push(`<div class="log-turn">— Interlude refit —</div>`);
-    for (const line of opts.operation.refitReport) logLines.push(`<div class="log-line"><span class="log-us">${line}</span></div>`);
+    for (const line of opts.operation.refitReport) {
+      const cut = line.indexOf(": ");
+      if (cut > 0) pushComms(line.slice(0, cut), line.slice(cut + 2), line.includes("REQUEST"));
+      else pushComms("DEPOT", line);
+    }
   }
   for (; cursor < state.events.length; cursor++) appendLog(state.events[cursor]);
 
@@ -153,6 +215,7 @@ export function startInteractive(
     renderHud();
     renderLog();
     renderNeeds();
+    updateComms();
     renderEnd();
   }
 

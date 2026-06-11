@@ -555,6 +555,26 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
 (D14), electronic warfare (D15), the persistent enemy, service records & the
 wall, generated operations. Horizon 3 ("The Deep Battlefield") is the next arc.
 
+- **UX-COMMS — the comms column (owner playtest ruling)** ✅
+  Playtest finding: dialogue obscured the play area (the needs panel sat on the
+  board; intent banners floated over the mechs). Ruling: dialogue gets a
+  DEDICATED box outside the play area, scrollable, Speaker — Content.
+  - *Layout*: in battle the board flexes left and a docked 300px COMMS column
+    owns the right edge (`body.with-comms`; the canvas sizes to its container,
+    so nothing renders under the column). Top: the live COMMANDER requests
+    (the same snapshot panel, reparented). Below: the scrolling transcript.
+  - *The transcript*: append-only, turn-stamped, deduped per turn; carries the
+    Interlude refit report (it's dialogue — the combat log stays a record of
+    actions), every needs line, and each player-side mech's intent CHANGES.
+    Fog-honest: only your own net is audible.
+  - *Structure over parsing*: `CommanderNeed` now carries `speaker` + `content`
+    alongside the assembled `text` — the sim says who's talking; the UI only
+    formats. Tested (`test/comms.test.ts`).
+  - *Banners retired*: the floating on-board intent banner is gone; intents
+    live on the cards, the inspect panel and the transcript. The play area
+    holds units, terrain and overlays — nothing else.
+  - Verified: 208 tests, uitest 18/18, screenshot `docs/shots/comms-column.png`.
+
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 
 Per the owner: the AI must (a) never behave tactically/logically unsoundly for
