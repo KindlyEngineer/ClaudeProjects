@@ -122,17 +122,20 @@ export function attackPreviews(state: GameState, unit: UnitInstance): AttackPrev
 export function supportActions(
   state: GameState,
   unit: UnitInstance,
-): { missions: boolean; fortify: boolean; mine: boolean; clear: boolean } {
-  if (!readyToOrder(state, unit) || unit.actedThisTurn) return { missions: false, fortify: false, mine: false, clear: false };
+): { missions: boolean; fortify: boolean; mine: boolean; clear: boolean; decoy: boolean } {
+  if (!readyToOrder(state, unit) || unit.actedThisTurn)
+    return { missions: false, fortify: false, mine: false, clear: false, decoy: false };
   const wi = missionWeaponIndex(unit);
   const missions =
     wi !== null && canFire(unit) && unit.dryTurns < RULES.dryFireTurns && unit.ammo[wi] >= RULES.mission.ammoCost;
   const engineer = unitType(unit.typeId).cls === "engineer";
+  const ew = unitType(unit.typeId).cls === "ew";
   return {
     missions,
     fortify: engineer,
     mine: engineer && mineTargets(state, unit).length > 0,
     clear: engineer && clearTargets(state, unit).length > 0,
+    decoy: ew && unit.ewCharges > 0 && !unit.crits.includes("sensors"),
   };
 }
 

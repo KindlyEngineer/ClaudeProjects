@@ -20,6 +20,7 @@ export const PHASES: readonly Phase[] = ["recon", "fires", "maneuver"];
 const HOME_PHASE: Record<UnitClass, Phase> = {
   recon: "recon",
   infantry: "recon",
+  ew: "recon", // light and electronic — it works before the shooting starts
   artillery: "fires",
   aa: "fires",
   mech: "maneuver",

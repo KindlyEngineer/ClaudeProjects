@@ -277,7 +277,15 @@ export class Stage {
 
   private async playBuild(ev: Extract<GameEvent, { kind: "build" }>): Promise<void> {
     if (!this.shownLive(ev.id) && this.state.units.find((u) => u.id === ev.id)?.side !== this.lastOpts.viewSide) return;
-    this.floatText(ev.at, "FORTIFIED", "#d8a03c");
+    const label =
+      ev.effect === "minefield"
+        ? "MINED"
+        : ev.effect === "minefield-cleared"
+          ? "BREACHED"
+          : ev.effect === "decoy"
+            ? "DECOY UP"
+            : "FORTIFIED";
+    this.floatText(ev.at, label, ev.effect === "decoy" ? "#9a7fc4" : "#d8a03c");
     await delay(260);
   }
 

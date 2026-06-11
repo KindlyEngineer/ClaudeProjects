@@ -1,9 +1,10 @@
 import { RULES } from "../data/rules";
 import type { Side } from "../data/types";
+import { unitType } from "../data/units";
 import { sightBlockedAt } from "./effects";
 import { heightClearsLine } from "./elevation";
 import { hexDistance, hexLine, type Hex } from "./hex";
-import { effectiveVision, livingUnits, type GameState, type UnitInstance } from "./state";
+import { effectiveVision, hasCrit, livingUnits, type GameState, type UnitInstance } from "./state";
 
 // Per-side vision (brief §2): the commander acts only on what its side can see —
 // "no recon → blind and cautious." A side sees a hex if any living friendly unit
@@ -33,8 +34,28 @@ export function weatherVision(state: GameState, base: number): number {
   return Math.max(2, Math.floor(base * w.visionFactor) + w.visionDelta);
 }
 
+/** Is `hex` under a hostile (to `viewerSide`) jam umbrella? A living EW unit
+ *  with its suite intact (no sensors crit) shields the ground around it: enemy
+ *  sensors reach into that ground only at burn-through range (D15). */
+export function jammedFor(state: GameState, viewerSide: Side, hex: Hex): boolean {
+  // canSee is hot — iterate the raw array (no livingUnits allocation).
+  for (const u of state.units) {
+    if (
+      u.structure > 0 &&
+      u.side !== viewerSide &&
+      unitType(u.typeId).cls === "ew" &&
+      !hasCrit(u, "sensors") &&
+      hexDistance(u.hex, hex) <= RULES.ew.jamRadius
+    )
+      return true;
+  }
+  return false;
+}
+
 export function canSee(state: GameState, observer: UnitInstance, target: Hex): boolean {
-  return hexDistance(observer.hex, target) <= weatherVision(state, effectiveVision(observer)) && hasLineOfSight(state, observer.hex, target);
+  let range = weatherVision(state, effectiveVision(observer));
+  if (jammedFor(state, observer.side, target)) range = Math.min(range, RULES.ew.burnThrough);
+  return hexDistance(observer.hex, target) <= range && hasLineOfSight(state, observer.hex, target);
 }
 
 /** Is `hex` inside one of `side`'s active recon-overflight footprints? (Air

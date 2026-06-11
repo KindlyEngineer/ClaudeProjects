@@ -325,6 +325,46 @@ export function layMinefield(state: GameState, unit: UnitInstance, target: Hex):
   return { ok: true };
 }
 
+/** May `unit` plant a DECOY on `target`? EW units with charges and an intact
+ *  suite only (D15) — the phantom needs ground a mech could plausibly stand on. */
+export function canDeployDecoy(state: GameState, unit: UnitInstance, target: Hex): { ok: boolean; reason?: string } {
+  if (unitType(unit.typeId).cls !== "ew") return { ok: false, reason: "not an EW unit" };
+  if (!isEligible(state, unit) || unit.actedThisTurn) return { ok: false, reason: "already acted" };
+  if (unit.crits.includes("sensors")) return { ok: false, reason: "EW suite is out" };
+  if (unit.ewCharges <= 0) return { ok: false, reason: "no decoy charges left" };
+  if (hexDistance(unit.hex, target) > RULES.ew.decoyRange) return { ok: false, reason: "out of projection range" };
+  if (!state.cells.has(hexKey(target))) return { ok: false, reason: "off map" };
+  if (!Number.isFinite(moveCostAt(state, target))) return { ok: false, reason: "nothing stands there — not believable" };
+  return { ok: true };
+}
+
+/** Plant a phantom signature in the ENEMY's belief map (D15): they reason over
+ *  it like any remembered sighting — position around it, hesitate at it — but
+ *  can never fire on it (it is never visibleNow), and it is blown the moment
+ *  they actually scout the hex. Consumes the main action and a charge. */
+export function deployDecoy(state: GameState, unit: UnitInstance, target: Hex): { ok: boolean; reason?: string } {
+  const gate = canDeployDecoy(state, unit, target);
+  if (!gate.ok) return gate;
+  const enemy = unit.side === "blue" ? "red" : "blue";
+  const t = unitType(RULES.ew.decoyType);
+  state.belief[enemy].set(-(state.events.length + 1), {
+    id: -(state.events.length + 1), // negative = phantom; unique per battle
+    typeId: t.id,
+    side: unit.side,
+    hex: { ...target },
+    facing: unit.side === "blue" ? 0 : 3,
+    structure: t.structure,
+    suppression: 0,
+    crits: [],
+    lastSeenTurn: state.turn, // decays like any memory if never "re-sighted"
+    visibleNow: false, // never fireable — there is nothing there
+  });
+  unit.ewCharges -= 1;
+  unit.actedThisTurn = true;
+  emit(state, { kind: "build", id: unit.id, side: unit.side, at: { ...target }, effect: "decoy" });
+  return { ok: true };
+}
+
 /** May `unit` CLEAR the hostile minefield on `target`? Adjacent engineers only. */
 export function canClearMines(state: GameState, unit: UnitInstance, target: Hex): { ok: boolean; reason?: string } {
   if (unitType(unit.typeId).cls !== "engineer") return { ok: false, reason: "not an engineer" };

@@ -26,6 +26,7 @@ export interface UnitInstance {
   crits: string[]; // active CritState ids (derived from component damage)
   componentsLost: string[]; // ComponentDef ids knocked out (M2.5)
   supply: number; // supply units: remaining resupply budget (else 0)
+  ewCharges: number; // ew units: decoys left this battle (else 0; D15)
   // Per-turn activation (reset each turn): a unit may move once and take one
   // main action (fire or resupply).
   movedThisTurn: boolean;
@@ -139,6 +140,7 @@ export function createGame(map: MapDef, seed: number): GameState {
       crits: [],
       componentsLost: [],
       supply: t.supplyCapacity ?? 0,
+      ewCharges: t.ewCharges ?? 0,
       movedThisTurn: false,
       actedThisTurn: false,
       reserved: false,

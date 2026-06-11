@@ -224,6 +224,10 @@ const ROLE: Record<UnitClass, RoleProfile> = {
   // Air defence escorts the force: stay inside the formation (mutual), keep the
   // umbrella over the advance, shoot only what wanders close.
   aa: { weights: { objective: 1.0, exposure: -2.0, mutual: 1.4, cover: 0.6, supply: 0.6, standoff: 0.8 }, idealRange: 5, action: "fire", expendable: 0.3 },
+  // EW escorts like AA — the jam umbrella is worth most over the formation. It
+  // has no gun; its DECOYS are a player verb (the AI's use arrives with the
+  // persistent-enemy slice).
+  ew: { weights: { objective: 1.0, exposure: -2.2, mutual: 1.5, cover: 0.8, supply: 0.6, standoff: 1.0 }, idealRange: 6, action: "none", expendable: 0.2 },
   // Supply must keep up with the spearhead to sustain it (cautious, but it can't
   // hang back so far the advance runs dry).
   supply: { weights: { objective: 1.3, exposure: -1.2, nearNeedy: 3, supply: 1.0, mutual: 0.6 }, idealRange: 0, action: "resupply", expendable: 0.1 },
@@ -434,6 +438,8 @@ function describe(
       return { stance: "suppress", intent: x.fireTargetId !== null ? `Suppressing ${tgtName()}` : "In battery — awaiting a fire mission" };
     case "supply":
       return { stance: "sustain", intent: ctx.needyHexes.length ? "Moving up to sustain the advance" : "Shadowing the spearhead" };
+    case "ew":
+      return { stance: "screen", intent: "Jamming — umbrella over the force" };
     default:
       if (x.objGain > 0) return { stance: "screen", intent: "Advancing in support" };
       if (x.fireTargetId !== null) return { stance: "assault", intent: `Engaging ${tgtName()}` };

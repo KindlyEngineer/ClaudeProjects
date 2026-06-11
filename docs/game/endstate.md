@@ -200,7 +200,7 @@ multiply them.
 | Piece | Ruling |
 |---|---|
 | **Trust** (D13 — THE LEAD) ✅ | Commanders react to the player's track record, legibly: starve a commander and it stops believing in deep advances (conservative weight shift, said out loud); sustain it and it accepts bolder lines. Earned, visible, per call sign. The relationship evolves. **Shipped** (H2-TRUST): per-call-sign 0..100 ledger from the event stream, WARY/STEADY/ASSURED bands on the utility weights, legible at deploy/needs/Interlude/refit, persisted. |
-| **Electronic warfare** (D15 — pulled forward) | Jammers (blind sensor radii) and DECOYS that inject false sightings into the enemy's belief map — attacking the game's defining substrate directly. |
+| **Electronic warfare** (D15 — pulled forward) ✅ | Jammers (blind sensor radii) and DECOYS that inject false sightings into the enemy's belief map — attacking the game's defining substrate directly. **Shipped** (H2-EW): `ew_vehicle` with jam umbrella (burn-through, air flies over) + phantom decoys (believed, never fireable, blown on scout). AI decoy use deferred to the persistent-enemy slice. |
 | Persistent enemy force | The opposing formation carries ITS losses/damage across the operation; scouting their remaining strength becomes operational intel. |
 | Service records & the wall | Kill tallies, battle honors, the fallen remembered by name — permanence made visible from the event stream. |
 | Generated/branching operations | Seeded campaign generation on the map generator + force budgets; handcrafted ops branch on outcomes. |

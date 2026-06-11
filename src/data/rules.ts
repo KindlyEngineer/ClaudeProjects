@@ -73,6 +73,19 @@ export const RULES = {
     night: { visionDelta: 0, visionFactor: 0.5, mudCost: 0 }, // eyes halved (min 2)
   },
 
+  // Electronic warfare (Horizon 2, ruling D15): attacks on the game's defining
+  // substrate — the belief map. A living EW unit with its suite intact JAMS:
+  // hexes inside its umbrella can only be seen by the enemy at burn-through
+  // range (you must close in). Its DECOYS plant a phantom signature in the
+  // enemy's belief — reasoned over like any remembered sighting, never
+  // fireable (visibleNow stays false), blown the moment the hex is scouted.
+  ew: {
+    jamRadius: 3, // the umbrella around a living, suite-intact EW unit
+    burnThrough: 3, // inside the umbrella, enemy sensors reach only this far
+    decoyRange: 6, // how far the EW track can project a phantom
+    decoyType: "mech_assault", // the signature it fakes — the scariest one
+  },
+
   // Air defence (M2.5): each living, fire-capable hostile AA unit within
   // `radius` of a strike's target rolls to drive the sortie off (sortie spent,
   // no effect). Overflights fly high and fast — uncontested in v1.
