@@ -531,6 +531,29 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
   end screen now raises THE WALL — every name that served, what it did, and
   "came home (trust N)" or "fell at <battle>". Rides the checkpoint save
   (load guard for older checkpoints). 3 tests — 200 total.
+- **H2-OPGEN — generated operations (closes Horizon 2)** ✅
+  A seeded campaign on the map generator. The (defId="genop", seed) pair is
+  ALL a checkpoint save stores — the identical campaign regenerates from it.
+  - *Resolution seams*: `mapById` resolves `genmap-<seed>-<i>` ids by
+    deterministic regeneration (memoized — cells are big, the call is hot);
+    `resolveOperationDef` answers the static registry first, `generatedOperation(seed)`
+    after. `operationDef`/`createOperation` route through it — nothing else
+    in the operation layer changed.
+  - *The campaign*: three battles, standard → standard → heavy escalation
+    (battle 0 fixes the two-mech roster; the finale earns its name), op01's
+    economy, generated briefings. Trust, the persistent enemy, service
+    records and the wall all hang off OperationState — they work on generated
+    campaigns unchanged, free.
+  - *Menu*: "New Operation — Generated front (seed N)"; Resume guards stale
+    saves with a try (a corrupt defId never kills the menu).
+  - Verified: 5 tests (determinism + cross-seed divergence, escalation,
+    full-campaign machinery to completion, headless full-AI soundness of a
+    generated battle, checkpoint regeneration byte-for-byte ground) — 205
+    total, uitest 18/18, self-play unchanged, build clean.
+
+**Horizon 2 — "The Living War" — is complete**: trust (D13), procedural audio
+(D14), electronic warfare (D15), the persistent enemy, service records & the
+wall, generated operations. Horizon 3 ("The Deep Battlefield") is the next arc.
 
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 

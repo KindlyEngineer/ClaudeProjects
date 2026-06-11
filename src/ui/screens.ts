@@ -1,4 +1,4 @@
-import { mapById, OPERATIONS } from "../data/operations";
+import { mapById, OPERATIONS, resolveOperationDef } from "../data/operations";
 import { unitType } from "../data/units";
 import type { GameEvent } from "../sim/events";
 import {
@@ -54,9 +54,14 @@ export function renderMenu(root: HTMLElement): void {
   const box = el("div", "menu-box");
   const save = loadOperation();
   if (save && save.outcome === "ongoing") {
-    const def = OPERATIONS[save.defId];
+    let defName = "operation";
+    try {
+      defName = resolveOperationDef(save.defId, save.seed).name; // a stale save never kills the menu
+    } catch {
+      // unknown def — the generic label still resumes it (and fails loudly later)
+    }
     box.appendChild(
-      btn(`Resume ${def?.name ?? "operation"} — battle ${save.battleIndex + 1}`, "btn menu-btn", () => {
+      btn(`Resume ${defName} — battle ${save.battleIndex + 1}`, "btn menu-btn", () => {
         nav(save.phase === "interlude" ? `?op=${save.defId}&interlude=1` : `?op=${save.defId}&battle=${save.battleIndex}`);
       }),
     );
@@ -66,6 +71,13 @@ export function renderMenu(root: HTMLElement): void {
       const op = createOperation("op01", ((Date.now() / 60000) | 0) % 10000 || 1); // a fresh, loggable seed
       saveOperation(op);
       nav(`?op=op01&interlude=1`);
+    }),
+  );
+  box.appendChild(
+    btn(`New Operation — Generated front (seed ${((Date.now() / 1000) | 0) % 100000})`, "btn menu-btn", () => {
+      const op = createOperation("genop", ((Date.now() / 1000) | 0) % 100000 || 1); // H2: a seeded campaign
+      saveOperation(op);
+      nav(`?op=genop&interlude=1`);
     }),
   );
   for (const [label, query] of [
