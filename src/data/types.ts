@@ -124,6 +124,10 @@ export interface MapDef {
   /** Off-map asset budget per side for this battle (defaults to none). The
    *  operation Interlude may top these up from the stockpile. */
   readonly offmap?: { readonly blue?: OffMapBudget; readonly red?: OffMapBudget };
+  /** The hexes a player may DEPLOY their composed support force into at battle
+   *  outset (M2.6). Omitted → derived in prepareBattle (blue's home band when
+   *  attacking, the objective's neighbourhood when defending). */
+  readonly deployZone?: readonly Hex[];
 }
 
 /** Side-level off-map calls available in a battle (air support, M1). */
@@ -162,7 +166,13 @@ export interface OperationDef {
   readonly blurb: string;
   readonly battles: readonly OperationBattleDef[];
   readonly initialStockpile: Stockpile;
-  /** Requisition prices (credits). A mech requisition fields a fully NEW named
-   *  entity — new call sign, commander-chosen chassis — never a resurrection. */
-  readonly prices: { readonly mech: number; readonly support: Readonly<Record<string, number>> };
+  /** Requisition price for a NEW mech (credits) — a fully new named entity,
+   *  commander-chosen chassis, never a resurrection. */
+  readonly mechPrice: number;
+  /** The support units the player may BUY and field (M2.6 force composition):
+   *  each type with its credit price. Mechs are never here — they're the
+   *  commander's. */
+  readonly supportCatalog: ReadonlyArray<{ readonly type: string; readonly price: number }>;
+  /** Hard cap on the number of player-controlled support units in the force. */
+  readonly supportCap: number;
 }

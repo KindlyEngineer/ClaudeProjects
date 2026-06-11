@@ -168,6 +168,14 @@ commander needs · mechanical elevation · call signs + terrain voice.
 | D7 | Defeat & saves | Failure-forward confirmed, **with checkpoint saves**: auto-save at every Interlude and battle end (localStorage); resume from the menu. |
 | D8 | Map scale | **Maps grow** as unit-type count and battlefield complexity grow — started with The Gap (36×22); the M2 scenario set continues the trend. |
 
+### M2.6 rulings (owner, 2026-06-12 — progression shift)
+
+| # | Question | Ruling |
+|---|----------|--------|
+| D9 | Force composition | The player BUYS their support echelon (mechs stay the commander's): **compose once at staging, reinforce at later Interludes** — survivors carry over (D1), un-fought purchases refundable, veterans never disbanded. |
+| D10 | Force limits | **Credits + a hard cap** (8 support units); the catalog spans all eleven support types. |
+| D11 | Deployment | The player **places their echelon in a start zone** at each operation battle's outset (free placement, fog up, confirm to begin). Skirmishes keep authored positions. Zones: authored per map, else derived — home band attacking, objective's neighbourhood defending. |
+
 ---
 *Maintained as decisions land. M1 shipped (carry-over, Interlude, AAR, saves,
 off-map air, shell, MAP03) and UI-4 (tactical design language). M2 COMPLETE (mines, defender seat, Causeway, Rearguard, generator + presets) and

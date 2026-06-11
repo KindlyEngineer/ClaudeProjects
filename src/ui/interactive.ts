@@ -6,7 +6,7 @@ import { buildFacingPicker, buildHexLabels, buildHexOverlay } from "../render/ov
 import { Stage, disposeGroup } from "../render/stage";
 import type { Side } from "../data/types";
 import { RULES } from "../data/rules";
-import { moveUnit, attackUnit, faceUnit, resupplyUnit, fireMission, fortifyHex, layMinefield, clearMinefield, canFireMission, missionArea, type MissionKind } from "../sim/actions";
+import { moveUnit, attackUnit, faceUnit, resupplyUnit, fireMission, fortifyHex, layMinefield, clearMinefield, canFireMission, confirmDeployment, deployUnit, missionArea, type MissionKind } from "../sim/actions";
 import { commandForce, decideUnit } from "../sim/ai";
 import type { GameEvent } from "../sim/events";
 import { commanderNeeds } from "../sim/needs";
@@ -85,9 +85,14 @@ export function startInteractive(
   let targeting: MissionKind | "fortify" | "mine" | "clearmines" | "strike" | "airrecon" | null = null; // a verb awaiting a target
   let hoverHex: Hex | null = null; // for the mission-area preview
 
-  // Opening intents so the mech banners read on turn 1 (decideUnit is pure).
-  beginTurn(state);
-  previewIntents(state);
+  // Deployment (M2.6, operation battles): the battle holds at the staging line
+  // until the player places the echelon. Upkeep/intents run on confirm.
+  let deploying = state.deployPending;
+  if (!deploying) {
+    // Opening intents so the mech banners read on turn 1 (decideUnit is pure).
+    beginTurn(state);
+    previewIntents(state);
+  }
 
   const cardsEl = ensure("cards");
   const barEl = ensure("bar");
@@ -178,6 +183,10 @@ export function startInteractive(
   function buildSelectionOverlays(): THREE.Group {
     const g = new THREE.Group();
     if (state.outcome !== "ongoing") return g;
+    if (deploying) {
+      g.add(buildHexOverlay(state, state.deployZone, 0x3d6f99, 0.16));
+      return g;
+    }
     // While aiming a move (or a turn-in-place), the board shows only the
     // destination + the facing rosette, the aimed face tracking the mouse.
     if (pendingMove) {
@@ -247,6 +256,21 @@ export function startInteractive(
     pendingMove = null;
     notice = null;
     setRay(ev);
+    if (deploying) {
+      const unitId = pickUnit();
+      const hex = pickHex();
+      const sel0 = selectedUnit();
+      if (unitId != null) {
+        selectedId = unitId; // any of yours; mechs show but refuse placement
+      } else if (sel0 && hex) {
+        const r = deployUnit(state, sel0, hex);
+        if (!r.ok) notice = r.reason ?? "cannot place there";
+      } else {
+        selectedId = null;
+      }
+      refresh();
+      return;
+    }
     const sel = selectedUnit();
     const o = sel && readyToOrder(state, sel) ? currentOptions() : EMPTY_OPTIONS;
 
@@ -453,7 +477,7 @@ export function startInteractive(
 
   // ── Phase / turn flow ────────────────────────────────────────────────────────
   function endPhase(): void {
-    if (state.outcome !== "ongoing" || playing) return;
+    if (state.outcome !== "ongoing" || playing || deploying) return;
     // The AI commands its units for this phase (both sides), then advance — the
     // same ordering as runMatch (player has already acted this phase).
     commandForce(state, "blue");
@@ -605,7 +629,9 @@ export function startInteractive(
     const decided = state.outcome !== "ongoing";
     info.textContent = decided
       ? "BATTLE DECIDED"
-      : `Turn ${state.turn}/${state.objective.turnLimit}  ·  ${state.phase.toUpperCase()} phase`;
+      : deploying
+        ? "DEPLOYMENT"
+        : `Turn ${state.turn}/${state.objective.turnLimit}  ·  ${state.phase.toUpperCase()} phase`;
     barEl.appendChild(info);
 
     const sel = selectedUnit();
@@ -615,7 +641,9 @@ export function startInteractive(
       ? ""
       : notice
         ? `✕ ${notice}`
-        : targeting
+        : deploying
+          ? "Place your echelon inside the highlighted zone — click a unit, then its hex"
+          : targeting
           ? targeting === "fortify"
             ? "Click a highlighted hex to fortify — Esc cancels"
             : targeting === "mine"
@@ -644,6 +672,17 @@ export function startInteractive(
         b.addEventListener("click", onClick);
         barEl.appendChild(b);
       };
+      if (deploying) {
+        mkBtn("Confirm deployment", "btn", () => {
+          confirmDeployment(state);
+          deploying = false;
+          selectedId = null;
+          beginTurn(state); // the battle begins from the positions you chose
+          previewIntents(state);
+          void playback(); // upkeep events flow into the log
+        });
+        return;
+      }
       if (targeting) {
         mkBtn("Cancel", "btn btn-alt", () => {
           targeting = null;

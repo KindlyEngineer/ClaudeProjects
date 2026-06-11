@@ -56,6 +56,8 @@ export interface GameState {
   skill: { blue: number; red: number }; // commander skill (0,1]; <1 = fallible
   offmap: { blue: { strike: number; recon: number }; red: { strike: number; recon: number } }; // air sorties left
   airRecon: AirReconCoverage[]; // active overflight footprints (this turn's eyes)
+  deployZone: Hex[]; // where the player may place its force pre-battle (M2.6); [] if none
+  deployPending: boolean; // true at battle outset until the player confirms deployment
 }
 
 /** A recon overflight's footprint: the calling side sees (and may engage) inside
@@ -175,6 +177,8 @@ export function createGame(map: MapDef, seed: number): GameState {
       red: { strike: map.offmap?.red?.strike ?? 0, recon: map.offmap?.red?.recon ?? 0 },
     },
     airRecon: [],
+    deployZone: (map.deployZone ?? []).map((h) => ({ ...h })),
+    deployPending: false,
   };
 }
 
