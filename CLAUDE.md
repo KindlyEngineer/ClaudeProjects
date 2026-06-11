@@ -85,9 +85,10 @@ by an autonomous main effort.
   player-side AI, the enemy, and AI-vs-AI self-play.
 - **One uniform combat model for every unit** (facing armour + structure + a
   shared 4-state crit table + suppression). No bespoke per-unit systems. No heat.
-- **Procedural art, fidelity welcome** (owner amendment 2026-06-09): build
-  models/effects/animation in code (primitives, shaders, tweens); limited
-  third-party tooling acceptable, internal preferred. No audio.
+- **Procedural art & audio, fidelity welcome** (owner amendments 2026-06-09 /
+  2026-06-13): build models/effects/animation in code (primitives, shaders,
+  tweens) and audio in code (Web Audio synthesis — no asset pipeline); limited
+  third-party tooling acceptable, internal preferred.
 
 ## Build & test
 - Install deps: handled at session start by `scripts/install_deps.sh`
