@@ -1,4 +1,4 @@
-import { OPERATIONS } from "../data/operations";
+import { mapById, OPERATIONS } from "../data/operations";
 import { unitType } from "../data/units";
 import type { GameEvent } from "../sim/events";
 import {
@@ -98,7 +98,8 @@ export function renderInterlude(root: HTMLElement, op: OperationState): void {
     screen.replaceChildren();
     screen.appendChild(el("div", "title-sm", def.name.toUpperCase()));
     screen.appendChild(el("div", "subtitle", `Interlude — preparing ${battle.title}`));
-    screen.appendChild(el("div", "briefing", battle.briefing));
+    const wx = mapById(battle.mapId).weather ?? "clear";
+    screen.appendChild(el("div", "briefing", battle.briefing + (wx === "clear" ? "" : ` <b>Forecast: ${wx.toUpperCase()}.</b>`)));
 
     if (op.history.length > 0) {
       const last = op.history[op.history.length - 1];

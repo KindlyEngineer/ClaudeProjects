@@ -11,6 +11,8 @@ export interface View {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
+  /** Switch the light rig to a battle-wide weather condition (M3). */
+  setWeather: (w: "clear" | "rain" | "night") => void;
   resize: () => void;
   /** Point the tilted camera so the given world-space box fills the frame. */
   frame: (min: THREE.Vector3, max: THREE.Vector3) => void;
@@ -33,7 +35,8 @@ export function createView(container: HTMLElement): View {
 
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
 
-  scene.add(new THREE.HemisphereLight(0xbcd0ff, 0x2a3020, 0.95));
+  const hemi = new THREE.HemisphereLight(0xbcd0ff, 0x2a3020, 0.95);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff3da, 1.6);
   sun.position.set(-18, 34, -10); // rakes across slopes so elevation reads
   sun.castShadow = true;
@@ -88,6 +91,31 @@ export function createView(container: HTMLElement): View {
     sun.shadow.camera.updateProjectionMatrix();
   };
 
+  const setWeather = (w: "clear" | "rain" | "night"): void => {
+    if (w === "rain") {
+      hemi.intensity = 0.6;
+      hemi.color.set(0x9fb2c8);
+      sun.intensity = 0.85;
+      sun.color.set(0xc8d4e0);
+      scene.fog = new THREE.Fog(0x0a0c10, 38, 130); // the world closes in
+      scene.background = new THREE.Color(0x0b0d11);
+    } else if (w === "night") {
+      hemi.intensity = 0.3;
+      hemi.color.set(0x33405c);
+      sun.intensity = 0.55;
+      sun.color.set(0x9fb8ff); // a hard moon
+      scene.fog = new THREE.Fog(0x05060a, 30, 115);
+      scene.background = new THREE.Color(0x05060a);
+    } else {
+      hemi.intensity = 0.95;
+      hemi.color.set(0xbcd0ff);
+      sun.intensity = 1.6;
+      sun.color.set(0xfff3da);
+      scene.fog = new THREE.Fog(0x0a0b0d, 70, 200);
+      scene.background = new THREE.Color(0x0a0b0d);
+    }
+  };
+
   const tick = () => controls.update();
   const render = () => renderer.render(scene, camera);
   const dispose = () => {
@@ -96,5 +124,5 @@ export function createView(container: HTMLElement): View {
     renderer.domElement.remove();
   };
 
-  return { renderer, scene, camera, resize, frame, tick, render, dispose };
+  return { renderer, scene, camera, setWeather, resize, frame, tick, render, dispose };
 }

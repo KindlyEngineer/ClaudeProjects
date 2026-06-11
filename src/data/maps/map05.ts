@@ -67,4 +67,5 @@ export const MAP05: MapDef = {
   objective: { kind: "seize", turnLimit: 20, zone, attacker: "blue" },
   commanderSkill: { blue: 1.0, red: 0.7 },
   offmap: { blue: { strike: 1, recon: 1 }, red: { recon: 1 } },
+  weather: "rain", // mud off the causeways; the far bank vanishes into the wet
 };

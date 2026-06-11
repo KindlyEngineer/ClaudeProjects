@@ -1,4 +1,5 @@
 import { effectDef, type EffectId } from "../data/effects";
+import { RULES } from "../data/rules";
 import { terrain } from "../data/terrain";
 import type { Side } from "../data/types";
 import { hexEquals, type Hex } from "./hex";
@@ -58,11 +59,16 @@ export function expireEffects(state: GameState): void {
 
 // ── The shared ground queries (terrain + whatever stands on it) ───────────────
 
-/** Movement cost to enter a hex (terrain + effects). Infinity = impassable. */
+/** Movement cost to enter a hex (terrain + effects + weather). Rain turns the
+ *  soft ground to mud — roads and pavement stay firm. Infinity = impassable. */
 export function moveCostAt(state: GameState, hex: Hex): number {
   const cell = state.cells.get(`${hex.q},${hex.r}`);
   if (!cell) return Infinity;
-  let cost = terrain(cell.terrain).moveCost;
+  const base = terrain(cell.terrain);
+  let cost = base.moveCost;
+  if (Number.isFinite(cost) && cell.terrain !== "road" && cell.terrain !== "urban") {
+    cost += RULES.weather[state.weather].mudCost;
+  }
   for (const e of effectsAt(state, hex)) cost += effectDef(e.kind).moveCostDelta;
   return cost;
 }

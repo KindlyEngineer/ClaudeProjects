@@ -58,4 +58,5 @@ export const MAP06: MapDef = {
   objective: { kind: "seize", turnLimit: 12, zone, attacker: "red" }, // hold until relieved
   commanderSkill: { blue: 1.0, red: 0.7 },
   offmap: { blue: { recon: 1 }, red: { strike: 1, recon: 1 } },
+  weather: "night", // the rearguard holds in the dark — eyes halved for everyone
 };

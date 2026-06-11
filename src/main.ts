@@ -116,6 +116,8 @@ function bootBattle(op: OperationState | null): void {
     state = createGame(map, seed);
   }
 
+  view.setWeather(state.weather); // the sky matches the sim (M3)
+
   const headless = params.get("scenario") === "coreproof" || params.get("demo") === "skirmish";
   if (params.get("scenario") === "coreproof") {
     // The core-proof match to a result. ?support=off → unsupported (mechs fail);
