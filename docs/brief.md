@@ -205,9 +205,10 @@ If criterion 1 cannot be met, stop and report.
 - No mech customization / mechlab.
 - No heat system.
 - No save/load (minimum if unavoidable).
-- No multiplayer. No audio. ~~No real art or animation polish~~ *(amended
-  2026-06-09 — see §"Programmer art" note: fidelity/animation now in scope,
-  procedural preferred)*. No UI gold-plating beyond legibility.
+- No multiplayer. ~~No audio~~ *(amended 2026-06-13: procedural/synthesized
+  audio in scope — Web Audio, no asset pipeline)*. ~~No real art or animation
+  polish~~ *(amended 2026-06-09: fidelity/animation in scope, procedural
+  preferred)*. No UI gold-plating beyond legibility.
 - **No direct player control of mechs and no intent/tasking interface — ever.**
   Load-bearing to the design, not a missing feature.
 

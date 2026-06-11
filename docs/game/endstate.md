@@ -1,4 +1,4 @@
-# VANTAGE — End-State Vision (the road to 1.0)
+# VANTAGE — The Horizons (1.0 is a waypoint, not the destination)
 
 > Companion to [`../brief.md`](../brief.md) (the founding spec, still binding) and
 > [`architecture.md`](architecture.md) (the build log). This document is the
@@ -181,5 +181,43 @@ commander needs · mechanical elevation · call signs + terrain voice.
 off-map air, shell, MAP03) and UI-4 (tactical design language). M2 COMPLETE (mines, defender seat, Causeway, Rearguard, generator + presets) and
 M2.5 (owner pivot): component-deep unit damage + six new types incl. the `aa`
 class that contests off-map strikes. M3 Character SHIPPED (temperaments + weather, D3/D4) after the owner's M2.6
-progression shift (composition + deployment, D9–D11). Next: M4 Ship (shell,
-settings, balance pass, deploy pipeline).*
+progression shift (composition + deployment, D9–D11).*
+
+---
+
+## 7. The Horizons (owner redirection, 2026-06-13)
+
+> The original plan was scoped to a shippable 1.0 and the project outgrew it
+> (owner: cutting at M4+polish sells the potential short). 1.0 is hereby a
+> QUALITY GATE on the way, not the end. The never-list (§5) stands untouched.
+
+### Horizon 1 — the waypoint (THIN M4, ruling D12: first)
+Shell/settings, a full-set balance pass, deploy pipeline. One slice. A
+stranger-playable build forces honesty about rough edges before new systems
+multiply them.
+
+### Horizon 2 — "The Living War" (leads after the gate)
+| Piece | Ruling |
+|---|---|
+| **Trust** (D13 — THE LEAD) | Commanders react to the player's track record, legibly: starve a commander and it stops believing in deep advances (conservative weight shift, said out loud); sustain it and it accepts bolder lines. Earned, visible, per call sign. The relationship evolves. |
+| **Electronic warfare** (D15 — pulled forward) | Jammers (blind sensor radii) and DECOYS that inject false sightings into the enemy's belief map — attacking the game's defining substrate directly. |
+| Persistent enemy force | The opposing formation carries ITS losses/damage across the operation; scouting their remaining strength becomes operational intel. |
+| Service records & the wall | Kill tallies, battle honors, the fallen remembered by name — permanence made visible from the event stream. |
+| Generated/branching operations | Seeded campaign generation on the map generator + force budgets; handcrafted ops branch on outcomes. |
+| **Audio** (D14 — brief AMENDED) | Procedural/synthesized only (Web Audio, no asset pipeline): radio crackle under commander lines, fire/impact reports, ambient weather. |
+
+### Horizon 3 — "The Deep Battlefield"
+Counter-battery radar + pre-planned/rolling barrages · illumination flares vs
+night · force-level morale collapse (break them, don't annihilate them) ·
+biomes (winter/desert/dense-urban) + multi-objective battles · the scenario
+editor (content is already data) · the LLM voice layer (narrate-first seam,
+owner-deferred) · helicopters/on-board air (investigate — biggest new class).
+
+### New rulings
+
+| # | Question | Ruling |
+|---|----------|--------|
+| D12 | 1.0 gate | **Thin M4 first**, then Horizon 2. |
+| D13 | Horizon-2 lead | **The trust system** leads the Living War arc. |
+| D14 | Audio | **Brief amended**: procedural/synthesized audio in scope. No asset pipeline. |
+| D15 | EW timing | **Pulled forward** into Horizon 2 (decoys/jammers vs the belief map). |
