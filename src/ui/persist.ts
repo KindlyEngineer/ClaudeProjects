@@ -19,9 +19,11 @@ export function loadOperation(): OperationState | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const op = JSON.parse(raw) as OperationState;
-    // Checkpoints saved before trust existed (Horizon 2, D13) load neutral.
+    // Checkpoints saved before trust existed (Horizon 2, D13) load neutral;
+    // ones saved before the persistent enemy (H2) fall back to fresh-per-battle.
     op.trust = op.trust ?? {};
     op.trustNotes = op.trustNotes ?? [];
+    op.enemy = op.enemy ?? [];
     return op;
   } catch {
     return null;
