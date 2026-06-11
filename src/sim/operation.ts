@@ -35,6 +35,7 @@ export interface BattleRecord {
   won: boolean;
   turns: number;
   mechsLost: string[]; // call signs that died (they stay dead)
+  enemyDestroyed: string[]; // enemy unit type NAMES confirmed killed this battle (H2)
 }
 
 export interface OperationState {
@@ -51,6 +52,11 @@ export interface OperationState {
   history: BattleRecord[];
   trust: Record<string, number>; // call sign → 0..100 confidence in the support (D13)
   trustNotes: string[]; // the last battle's trust ledger, in the commanders' words
+  /** The PERSISTENT enemy formation (H2): every battle fields what's LEFT of
+   *  it. Kill a tank in battle one and it isn't waiting in battle three —
+   *  attrition becomes operational work, and reading their remaining strength
+   *  becomes operational intel. */
+  enemy: UnitRecord[];
 }
 
 export function operationDef(op: OperationState): OperationDef {
@@ -99,6 +105,18 @@ export function createOperation(defId: string, seed: number): OperationState {
   const roster = mechSpots.map((p) => fullRecord(p.type, CALL_SIGNS[signs++ % CALL_SIGNS.length]));
   const trust: Record<string, number> = {};
   for (const r of roster) if (r.callSign) trust[r.callSign] = RULES.trust.start;
+  // The enemy FORMATION (H2): per type, the largest contingent any battle
+  // fields — so every battle opens fully manned unless the player has already
+  // thinned it. Battles draw from the survivors; the dead are not replaced.
+  const enemyCounts = new Map<string, number>();
+  for (const b of def.battles) {
+    const local = new Map<string, number>();
+    for (const p of mapById(b.mapId).units) if (p.side === "red") local.set(p.type, (local.get(p.type) ?? 0) + 1);
+    for (const [t, n] of local) enemyCounts.set(t, Math.max(enemyCounts.get(t) ?? 0, n));
+  }
+  const enemy = [...enemyCounts.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .flatMap(([t, n]) => Array.from({ length: n }, () => fullRecord(t)));
   return {
     defId,
     seed,
@@ -113,6 +131,7 @@ export function createOperation(defId: string, seed: number): OperationState {
     history: [],
     trust,
     trustNotes: [],
+    enemy,
   };
 }
 
@@ -378,6 +397,33 @@ export function prepareBattle(op: OperationState): GameState {
   }
   state.units = state.units.filter((u) => u.side !== "blue" || !unmatched.includes(u));
 
+  // The persistent ENEMY (H2): red slots ← living enemy records, same-type
+  // matching. A slot with nobody left to man it stands EMPTY — the player's
+  // earlier attrition is felt here. No spare-chassis substitution: the enemy
+  // fields what the scenario calls for or goes without.
+  if (op.enemy?.length) {
+    const usedE = new Set<number>();
+    const matchE = new Map<number, number>();
+    const ghosts: UnitInstance[] = [];
+    for (const u of state.units.filter((x) => x.side === "red")) {
+      const idx = op.enemy.findIndex((r, i) => !usedE.has(i) && r.alive && r.typeId === u.typeId);
+      if (idx >= 0) {
+        usedE.add(idx);
+        matchE.set(u.id, idx);
+      } else ghosts.push(u); // nobody left of this type — the slot stays empty
+    }
+    state.units = state.units.filter((u) => u.side !== "red" || !ghosts.includes(u));
+    for (const u of state.units) {
+      const idx = matchE.get(u.id);
+      if (idx === undefined) continue;
+      const r = op.enemy[idx];
+      u.structure = r.structure;
+      u.crits = [...r.crits];
+      u.componentsLost = [...r.componentsLost];
+      u.enemyRosterIndex = idx; // ammo/fuel arrive topped up — they refit too
+    }
+  }
+
   // The composed echelon spawns into the deployment zone (default spread; the
   // player repositions before turn one).
   const zone = deriveDeployZone(map);
@@ -457,6 +503,28 @@ export function recordBattle(op: OperationState, state: GameState): void {
     if (!r.alive && r.callSign) mechsLost.push(r.callSign);
   }
 
+  // The enemy's ledger (H2): capture what the battle did to THEIR formation.
+  // The fallen are confirmed (the field is yours to read after the fight);
+  // survivors lick their wounds — full resupply, HALF the hull damage repaired,
+  // broken components stay broken (their bench is at the front too).
+  const enemyDestroyed: string[] = [];
+  for (const u of state.units) {
+    const idx = u.enemyRosterIndex;
+    if (idx === undefined) continue;
+    const r = op.enemy[idx];
+    r.alive = u.structure > 0;
+    r.structure = u.structure;
+    r.componentsLost = [...u.componentsLost];
+    recomputeCrits(r);
+    if (!r.alive) enemyDestroyed.push(unitType(r.typeId).name);
+    else {
+      const t = unitType(r.typeId);
+      r.structure = Math.min(t.structure, r.structure + Math.ceil((t.structure - r.structure) / 2));
+      r.ammo = t.weapons.map((w) => w.ammoMax);
+      r.fuel = t.fuelMax;
+    }
+  }
+
   // The trust ledger (D13): each surviving mech scores THIS battle by what it
   // lived — the outcome, the resupply runs that actually reached it, whether it
   // ended starved, and the names that didn't come back. Legible, line by line.
@@ -494,7 +562,7 @@ export function recordBattle(op: OperationState, state: GameState): void {
     recon: op.stockpile.recon + (award.recon ?? 0),
     credits: op.stockpile.credits + (award.credits ?? 0),
   };
-  op.history.push({ title: battle.title, won, turns: state.turn, mechsLost });
+  op.history.push({ title: battle.title, won, turns: state.turn, mechsLost, enemyDestroyed });
 
   const mechsLeft = op.roster.some((r) => r.alive && unitType(r.typeId).cls === "mech");
   const finalBattle = op.battleIndex === def.battles.length - 1;
@@ -510,10 +578,11 @@ export function recordBattle(op: OperationState, state: GameState): void {
   }
 }
 
-// The roster link travels on the unit so recording survives serialization-free.
+// The roster links travel on the unit so recording survives serialization-free.
 declare module "./state" {
   interface UnitInstance {
     userRosterIndex?: number;
+    enemyRosterIndex?: number; // red unit → op.enemy index (H2 persistent enemy)
   }
 }
 

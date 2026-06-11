@@ -162,6 +162,18 @@ export function renderInterlude(root: HTMLElement, op: OperationState): void {
       }
     }
 
+    // Operational intel (H2 persistent enemy): only what's CONFIRMED — the
+    // formation ahead is whatever you haven't already destroyed.
+    const confirmed = op.history.flatMap((h) => h.enemyDestroyed ?? []);
+    if (confirmed.length) {
+      const tally = new Map<string, number>();
+      for (const n of confirmed) tally.set(n, (tally.get(n) ?? 0) + 1);
+      const line = [...tally.entries()].map(([n, c]) => `${c}× ${n}`).join(" · ");
+      screen.appendChild(
+        el("div", "hint trust-notes", `CONFIRMED ENEMY LOSSES, operation to date: ${line}.<br>The formation ahead is what's left of the one you've been fighting.`),
+      );
+    }
+
     // The stockpile strip.
     const s = op.stockpile;
     screen.appendChild(

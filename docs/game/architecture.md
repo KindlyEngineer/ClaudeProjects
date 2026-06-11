@@ -502,6 +502,26 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
   - Verified: 7 EW tests (umbrella, burn-through, crit/kill restores sight,
     own-side immunity, air-over-jam, phantom belief/no-fire/charges/range,
     exposure shift, scout-dispel + decay) — 193 total, uitest 18/18, build clean.
+- **H2-ENEMY — the persistent enemy force** ✅
+  The opposing formation carries ITS losses across the operation — attrition
+  becomes operational work, confirmed kills become operational intel.
+  - *The formation* (`OperationState.enemy`): per type, the largest contingent
+    any battle fields (so every battle opens fully manned unless the player
+    has already thinned it). Battles fill red slots from living records,
+    same-type matching, NO spare substitution — a slot with nobody left to man
+    it stands empty. Same machinery as the blue mech carry-over.
+  - *Their refit* (in `recordBattle`): survivors return with full resupply,
+    HALF the hull damage repaired, broken components still broken. The dead
+    are never replaced (the enemy has no requisitions — yet; generated
+    operations may change that).
+  - *Intel, fog-honest*: only CONFIRMED losses surface
+    (`BattleRecord.enemyDestroyed` → the Interlude tally). Remaining strength
+    is never printed — scouting it stays the player's job.
+  - *Persistence*: rides the checkpoint save; pre-enemy saves fall back to
+    fresh-per-battle (legacy behaviour) via the load guard.
+  - Verified: 4 tests (formation sizing, carry + patched survivors + confirmed
+    intel, annihilated types leave empty slots, JSON round-trip) — 197 total,
+    uitest 18/18, self-play unchanged.
 
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 

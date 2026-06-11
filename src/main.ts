@@ -53,7 +53,7 @@ if (params.has("opdemo")) {
   if (hud) hud.remove();
   const demo = createOperation("op01", 7);
   demo.battleIndex = 1;
-  demo.history.push({ title: "Battle I — Ridge Approach", won: true, turns: 11, mechsLost: [] });
+  demo.history.push({ title: "Battle I — Ridge Approach", won: true, turns: 11, mechsLost: [], enemyDestroyed: ["Line Tank", "Mech. Infantry"] });
   const mech = demo.roster.find((r) => r.callSign)!;
   mech.structure = 12;
   mech.componentsLost = ["sensors"];
