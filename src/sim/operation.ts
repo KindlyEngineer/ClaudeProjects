@@ -1,4 +1,4 @@
-import { mapById, OPERATIONS } from "../data/operations";
+import { mapById, resolveOperationDef } from "../data/operations";
 import { RULES } from "../data/rules";
 import { terrain } from "../data/terrain";
 import type { MapDef, OperationDef, Stockpile, UnitPlacement } from "../data/types";
@@ -71,9 +71,7 @@ export interface ServiceRecord {
 }
 
 export function operationDef(op: OperationState): OperationDef {
-  const def = OPERATIONS[op.defId];
-  if (!def) throw new Error(`unknown operation '${op.defId}'`);
-  return def;
+  return resolveOperationDef(op.defId, op.seed); // static registry, or regenerated from the seed (H2)
 }
 
 function fullRecord(typeId: string, callSign?: string): UnitRecord {
@@ -109,8 +107,7 @@ function recomputeCrits(r: UnitRecord): void {
  *  operation); the player COMPOSES the support echelon from scratch in the
  *  staging Interlude (M2.6 — credits + cap), then deploys it each battle. */
 export function createOperation(defId: string, seed: number): OperationState {
-  const def = OPERATIONS[defId];
-  if (!def) throw new Error(`unknown operation '${defId}'`);
+  const def = resolveOperationDef(defId, seed);
   const mechSpots = mapById(def.battles[0].mapId).units.filter((p) => p.side === "blue" && unitType(p.type).cls === "mech");
   let signs = 0;
   const roster = mechSpots.map((p) => fullRecord(p.type, CALL_SIGNS[signs++ % CALL_SIGNS.length]));
