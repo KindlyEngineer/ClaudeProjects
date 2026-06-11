@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { createView } from "./render/view";
-import { tickAnimations } from "./render/anim";
+import { setAnimSpeed, tickAnimations } from "./render/anim";
+import { getSettings } from "./ui/settings";
 import { buildBoard } from "./render/board";
 import { addEffect } from "./sim/effects";
 import { hexToWorld } from "./sim/hex";
@@ -35,6 +36,7 @@ const container = document.getElementById("app");
 if (!container) throw new Error("#app not found");
 const hud = document.getElementById("hud");
 const params = new URLSearchParams(location.search);
+setAnimSpeed(getSettings().animSpeed); // M4: player-set presentation speed
 
 const setReady = (): void => {
   (window as unknown as { __vantageReady?: boolean }).__vantageReady = true;
