@@ -93,6 +93,42 @@
       #needs .needs-line { color: var(--ink-dim); margin-top: 2px; }
       #needs .needs-warn { color: var(--amber); font-weight: 600; }
 
+      /* The COMMS column — every voice, OUTSIDE the play area. In battle the
+         board flexes left and this column owns the right edge: the live
+         commander requests on top, the scrolling Speaker — Content transcript
+         below. Nothing here ever covers a hex. */
+      body.with-comms { display: flex; }
+      body.with-comms #app { flex: 1 1 auto; min-width: 0; width: auto; height: 100vh; }
+      #comms {
+        flex: 0 0 300px; width: 300px; height: 100vh; box-sizing: border-box;
+        display: flex; flex-direction: column; user-select: none;
+        background: var(--panel); border-left: 1px solid var(--line);
+      }
+      #comms .comms-head {
+        flex: 0 0 auto; padding: 8px 10px 6px; font-size: 8.5px; font-weight: 800;
+        letter-spacing: 2.5px; color: var(--ink-faint);
+        border-bottom: 1px solid var(--line-soft, #1c2025);
+      }
+      body.with-comms #needs {
+        position: static; width: auto; flex: 0 0 auto; max-height: 30vh; overflow-y: auto;
+        border: none; border-left: 2px solid var(--amber-dim, #8a6a2f);
+        border-bottom: 1px solid var(--line); border-radius: 0; scrollbar-width: thin;
+      }
+      #commsfeed {
+        flex: 1 1 auto; overflow-y: auto; padding: 7px 10px; font-size: 9.5px;
+        line-height: 1.55; color: var(--ink-dim); scrollbar-width: thin;
+      }
+      #commsfeed .comms-line { margin-top: 5px; }
+      #commsfeed .comms-line .who { color: var(--friend); font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+      #commsfeed .comms-warn { color: var(--amber); }
+      #commsfeed .comms-warn .who { color: var(--amber); }
+      #commsfeed .comms-turn {
+        margin-top: 8px; font-size: 8px; font-weight: 800; letter-spacing: 2px;
+        color: var(--ink-faint); text-transform: uppercase;
+      }
+      /* Right-anchored overlays slide inboard of the column. */
+      body.with-comms #inspect { right: 312px; }
+
       /* Combat log — fog-honest record (left). */
       #log {
         position: fixed; left: 12px; bottom: 10px; width: 255px; max-height: 30vh;
