@@ -24,6 +24,7 @@ export function loadOperation(): OperationState | null {
     op.trust = op.trust ?? {};
     op.trustNotes = op.trustNotes ?? [];
     op.enemy = op.enemy ?? [];
+    op.records = op.records ?? {};
     return op;
   } catch {
     return null;

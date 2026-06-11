@@ -220,7 +220,9 @@ export function renderInterlude(root: HTMLElement, op: OperationState): void {
       }
       if (isMech && r.alive) {
         const tn = trustOf(op, r.callSign);
-        card.appendChild(el("div", "hint", `Trust <b>${tn}</b> — ${trustBand(tn)} · refitted by the commander, from the depot.`));
+        const rec = op.records?.[r.callSign ?? ""];
+        const service = rec ? ` · ${rec.kills} kill${rec.kills === 1 ? "" : "s"} in ${rec.battles} battle${rec.battles === 1 ? "" : "s"}` : "";
+        card.appendChild(el("div", "hint", `Trust <b>${tn}</b> — ${trustBand(tn)}${service} · refitted by the commander, from the depot.`));
       }
       grid.appendChild(card);
     });
@@ -363,6 +365,29 @@ export function renderOperationEnd(root: HTMLElement, op: OperationState): void 
   const survivors = op.roster.filter((r) => r.alive && r.callSign).map((r) => r.callSign!);
   hist.appendChild(el("div", "aar-voice", survivors.length ? `${survivors.join(", ")} came home.` : "Nobody came home."));
   screen.appendChild(hist);
+
+  // THE WALL (H2): every name that served, what it did, and where it ended.
+  const served = op.usedCallSigns.filter((cs) => op.records?.[cs]);
+  if (served.length) {
+    const wall = el("div", "menu-box");
+    wall.appendChild(el("div", "aar-head", "THE WALL — SERVICE RECORDS"));
+    for (const cs of served) {
+      const r = op.records[cs];
+      const t = op.roster.find((x) => x.callSign === cs);
+      const fate = r.fellAt
+        ? `<span class="warn">fell at ${r.fellAt}</span>`
+        : `came home${t ? ` · trust ${trustOf(op, cs)}` : ""}`;
+      wall.appendChild(
+        el(
+          "div",
+          "aar-line",
+          `<b>${cs}</b> — ${r.battles} battle${r.battles === 1 ? "" : "s"} · ${r.kills} kill${r.kills === 1 ? "" : "s"} · ` +
+            `${r.resupplied} resuppl${r.resupplied === 1 ? "y" : "ies"} received · ${fate}`,
+        ),
+      );
+    }
+    screen.appendChild(wall);
+  }
   screen.appendChild(
     btn("Return to menu", "btn begin", () => {
       clearOperation();
