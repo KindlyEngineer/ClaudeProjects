@@ -767,7 +767,8 @@ export function startInteractive(
   function renderHud(): void {
     if (!hudEl) return;
     const obj = state.objective;
-    hudEl.innerHTML = `VANTAGE — ${state.map.name}&nbsp;&nbsp;·&nbsp;&nbsp;${obj.kind.toUpperCase()} — attacker ${obj.attacker.toUpperCase()} · you run ${playerSide.toUpperCase()} support`;
+    const wx = state.weather === "clear" ? "" : `&nbsp;&nbsp;·&nbsp;&nbsp;${state.weather.toUpperCase()}`;
+    hudEl.innerHTML = `VANTAGE — ${state.map.name}&nbsp;&nbsp;·&nbsp;&nbsp;${obj.kind.toUpperCase()} — attacker ${obj.attacker.toUpperCase()} · you run ${playerSide.toUpperCase()} support${wx}`;
   }
 
   /** The commander's requests — what the autonomous main effort needs from YOU. */

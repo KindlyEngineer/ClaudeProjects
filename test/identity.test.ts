@@ -40,7 +40,7 @@ describe("call signs — the main effort you serve", () => {
 
     const card = cardModel(s, mech);
     expect(card.name).toBe(mech.callSign);
-    expect(card.subtitle).toBe("Assault Mech"); // type kept as a subtitle
+    expect(card.subtitle).toContain("Assault Mech"); // type + temperament tag (M3)
 
     mech.ammo = mech.ammo.map(() => 0);
     const needs = commanderNeeds(s, "blue");

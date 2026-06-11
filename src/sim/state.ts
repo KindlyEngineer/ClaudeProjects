@@ -1,4 +1,4 @@
-import type { Controller, MapCell, MapDef, ObjectiveDef, Side } from "../data/types";
+import type { Controller, MapCell, MapDef, ObjectiveDef, Side, Weather } from "../data/types";
 import { terrain } from "../data/terrain";
 import { unitType } from "../data/units";
 import type { BattlefieldEffect } from "./effects";
@@ -58,6 +58,7 @@ export interface GameState {
   airRecon: AirReconCoverage[]; // active overflight footprints (this turn's eyes)
   deployZone: Hex[]; // where the player may place its force pre-battle (M2.6); [] if none
   deployPending: boolean; // true at battle outset until the player confirms deployment
+  weather: Weather; // battle-wide condition (M3): clear / rain / night
 }
 
 /** A recon overflight's footprint: the calling side sees (and may engage) inside
@@ -179,6 +180,7 @@ export function createGame(map: MapDef, seed: number): GameState {
     airRecon: [],
     deployZone: (map.deployZone ?? []).map((h) => ({ ...h })),
     deployPending: false,
+    weather: map.weather ?? "clear",
   };
 }
 

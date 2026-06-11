@@ -65,6 +65,14 @@ export const RULES = {
     mobilityCritChance: 0.5, // tracks and legs are what mines eat
   },
 
+  // Weather (M3, ruling D4): battle-wide conditions on the shared queries —
+  // the AI adapts through the same vision/movement questions everyone asks.
+  weather: {
+    clear: { visionDelta: 0, visionFactor: 1, mudCost: 0 },
+    rain: { visionDelta: -2, visionFactor: 1, mudCost: 0.5 }, // soft ground off the roads
+    night: { visionDelta: 0, visionFactor: 0.5, mudCost: 0 }, // eyes halved (min 2)
+  },
+
   // Air defence (M2.5): each living, fire-capable hostile AA unit within
   // `radius` of a strike's target rolls to drive the sortie off (sortie spent,
   // no effect). Overflights fly high and fast — uncontested in v1.

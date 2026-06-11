@@ -1,3 +1,4 @@
+import { RULES } from "../data/rules";
 import type { Side } from "../data/types";
 import { sightBlockedAt } from "./effects";
 import { heightClearsLine } from "./elevation";
@@ -25,8 +26,15 @@ export function hasLineOfSight(state: GameState, from: Hex, to: Hex): boolean {
   return heightClearsLine(state, from, to);
 }
 
+/** Sight range under the battle's weather: rain trims it, night halves it
+ *  (never below 2 — you can always see the hex you're standing next to). */
+export function weatherVision(state: GameState, base: number): number {
+  const w = RULES.weather[state.weather];
+  return Math.max(2, Math.floor(base * w.visionFactor) + w.visionDelta);
+}
+
 export function canSee(state: GameState, observer: UnitInstance, target: Hex): boolean {
-  return hexDistance(observer.hex, target) <= effectiveVision(observer) && hasLineOfSight(state, observer.hex, target);
+  return hexDistance(observer.hex, target) <= weatherVision(state, effectiveVision(observer)) && hasLineOfSight(state, observer.hex, target);
 }
 
 /** Is `hex` inside one of `side`'s active recon-overflight footprints? (Air

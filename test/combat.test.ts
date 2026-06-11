@@ -60,6 +60,7 @@ function mkState(seed: number, units: UnitInstance[]): GameState {
     airRecon: [],
     deployZone: [],
     deployPending: false,
+    weather: "clear" as const,
   };
 }
 

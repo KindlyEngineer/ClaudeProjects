@@ -7,6 +7,7 @@ import { armorArc, hexDistance, hexEquals, neighbors, type Hex } from "../sim/he
 import { needsSupply } from "../sim/logistics";
 import { reachable, type ReachNode } from "../sim/pathing";
 import { RULES } from "../data/rules";
+import { temperamentOf } from "../data/temperaments";
 import { canFire, canMove, cellAt, livingUnits, unitLabel, type GameState, type Sighting, type UnitInstance } from "../sim/state";
 import { isEligible } from "../sim/turn";
 
@@ -202,7 +203,7 @@ export function cardModel(state: GameState, unit: UnitInstance): CardModel {
     side: unit.side,
     abbr: t.cls.charAt(0).toUpperCase(),
     name: unitLabel(unit),
-    subtitle: unit.callSign ? t.name : null,
+    subtitle: unit.callSign ? `${t.name}${temperamentOf(unit.callSign) ? " · " + temperamentOf(unit.callSign)!.name : ""}` : null,
     controllable: isPlayerControllable(unit),
     ready: readyToOrder(state, unit),
     reserved: unit.reserved,

@@ -161,5 +161,6 @@ export function randomSkirmishMap(seed: number, preset: ForcePreset = "standard"
     objective: { kind: "seize", turnLimit: 18, zone: zoneCells.map(([c, r]) => offsetToAxial(c, r)), attacker: "blue" },
     commanderSkill: { blue: 1.0, red: 0.7 },
     offmap: { blue: { strike: 1, recon: 1 }, red: { strike: 1, recon: 1 } },
+    weather: (["clear", "clear", "rain", "night"] as const)[mapSeed % 4], // seeded sky
   };
 }

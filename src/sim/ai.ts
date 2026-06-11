@@ -14,6 +14,7 @@ import { canMove, elevationAt, livingUnits, type GameState, type UnitInstance } 
 import { isEligible } from "./turn";
 import { isScouted } from "./vision";
 import { aiNoise } from "./ainoise";
+import { temperamentOf, type Temperament } from "../data/temperaments";
 import { planForce, type Task } from "./plan";
 
 // The force AI: ONE capability-aware, fog-limited brain that commands whatever
@@ -289,6 +290,14 @@ export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): U
   };
 
   const weights: Record<string, number> = { ...taskWeights(role.weights, task) };
+  // Temperament (M3): the call sign's personality bends the same machine —
+  // Saber discounts exposure, Vanguard pays extra for cover and margins.
+  const temperament = cls === "mech" ? temperamentOf(unit.callSign) : undefined;
+  if (temperament) {
+    for (const [k, f] of Object.entries(temperament.weightMul)) {
+      if (weights[k] !== undefined) weights[k] *= f;
+    }
+  }
   // Risk-vs-reward: keep units alive by default, but on a COMMITTING task accept
   // more risk to SPEND expendable units for the outcome — cheap scouts/screens go
   // forward; precious fire support and supply stay protected.
@@ -339,7 +348,7 @@ export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): U
   const objGain = ctx.dObjFrom - nearestDist(bestHex, goal);
   // Is the chosen ground commanding — meaningfully above the perceived enemy?
   const highGround = ctx.enemyElev !== null && elevationAt(state, bestHex) - ctx.enemyElev >= 1.2;
-  const { stance, intent } = describe(cls, ctx, { objGain, exposed: exposureAt(state, side, bestHex, believed), fireTargetId, mobile, highGround }, task);
+  const { stance, intent } = describe(cls, ctx, { objGain, exposed: exposureAt(state, side, bestHex, believed), fireTargetId, mobile, highGround }, task, temperament);
   return { unitId: unit.id, stance, intent, destination: bestHex, path, fireTargetId };
 }
 
@@ -362,7 +371,18 @@ function describe(
   ctx: AiContext,
   x: { objGain: number; exposed: number; fireTargetId: number | null; mobile: boolean; highGround: boolean },
   task?: Task,
+  temperament?: Temperament,
 ): { stance: Stance; intent: string } {
+  /** The temperament's own words, when it has them for this stance. */
+  const speak = (stance: Stance, fallback: string): string => {
+    const v = temperament?.voice;
+    if (!v) return fallback;
+    if (stance === "advance" && v.advance) return v.advance;
+    if (stance === "assault" && v.assault) return v.assault;
+    if (stance === "hold" && v.hold) return v.hold;
+    if (stance === "resupply" && v.resupply) return v.resupply;
+    return fallback;
+  };
   const tgtName = () => {
     const t = ctx.visible.find((e) => e.id === x.fireTargetId);
     return t ? unitType(t.typeId).name : "the enemy";
@@ -388,10 +408,15 @@ function describe(
   }
   if (cls === "mech") {
     if (!x.mobile) return { stance: "immobilised", intent: x.fireTargetId !== null ? "Immobilised — holding and returning fire" : "Immobilised — stranded, awaiting recovery" };
-    if (ctx.need.need >= W.needTrigger && x.objGain <= 0) return { stance: "resupply", intent: `Breaking contact to resupply (${ctx.need.reason || "sustainment"})` };
-    if (ctx.dObjFrom === 0 && x.objGain <= 0) return { stance: "hold", intent: x.highGround ? "Holding the high ground on the objective" : "Holding the objective" };
-    if (x.objGain > 0) return { stance: "advance", intent: x.highGround ? "Cresting the ridge — pressing the attack" : "Advancing on the objective" };
-    if (x.fireTargetId !== null) return { stance: "assault", intent: x.highGround ? `Overwatch from high ground — engaging ${tgtName()}` : `Pressing the assault on ${tgtName()}` };
+    if (ctx.need.need >= W.needTrigger && x.objGain <= 0) {
+      // The voice may flavour it, but the REASON always ships — legibility first.
+      const reason = ctx.need.reason || "sustainment";
+      const flavoured = speak("resupply", "");
+      return { stance: "resupply", intent: flavoured ? `${flavoured} (${reason})` : `Breaking contact to resupply (${reason})` };
+    }
+    if (ctx.dObjFrom === 0 && x.objGain <= 0) return { stance: "hold", intent: x.highGround ? "Holding the high ground on the objective" : speak("hold", "Holding the objective") };
+    if (x.objGain > 0) return { stance: "advance", intent: x.highGround ? "Cresting the ridge — pressing the attack" : speak("advance", "Advancing on the objective") };
+    if (x.fireTargetId !== null) return { stance: "assault", intent: x.highGround ? `Overwatch from high ground — engaging ${tgtName()}` : speak("assault", `Pressing the assault on ${tgtName()}`) };
     return { stance: "consolidate", intent: ctx.believed.length > 0 ? "Consolidating — axis too exposed" : "Holding — awaiting reconnaissance" };
   }
   switch (cls) {

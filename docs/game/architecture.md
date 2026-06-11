@@ -392,6 +392,29 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
     derivation both seats, placement validation, skirmish exemption);
     `?deploydemo`/`?opdemo` verification routes; 18 e2e checks green.
 
+- **M3 — Character: temperaments + weather** ✅ (rulings D3/D4)
+  - **Temperaments** (`data/temperaments.ts`): each call sign carries a
+    personality — utility-weight multipliers + a VOICE. Bold (Saber/Talon/
+    Cobra) discounts exposure and leans in; Methodical (Vanguard/Warden/
+    Halberd) pays for cover and margins; Opportunist (Reaper/Ronin) hunts
+    flanks and heights. The same machine plays and talks differently under a
+    different name; verified deterministically (Saber ends closer to the enemy
+    than Vanguard in a mirrored fight, same seed). Terrain-flavoured intent
+    lines outrank temperament voice; the resupply REASON always ships
+    (legibility first). Cards tag the temperament; during DEPLOYMENT the
+    commanders comment on the staging in their own voices (the radio works
+    both ways).
+  - **Weather** (`RULES.weather`, `MapDef.weather`): battle-wide conditions on
+    the shared queries — rain trims sight and turns soft ground to mud (roads
+    stay firm); night halves vision (the AI adapts because everyone asks the
+    same questions). Light rigs per condition (`view.setWeather`): the night
+    Rearguard plays in a closed-down dark, the rainy Causeway in a grey soup.
+    Forecast line in the Interlude briefing; seeded weather on random
+    skirmishes.
+  - Verification: 172 vitest tests (temperament divergence/voice/deploy-quotes,
+    weather vision/mud/night-battle soundness); self-play ELEVEN-scenario-state
+    0 invariant violations; 18 e2e checks green.
+
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 
 Per the owner: the AI must (a) never behave tactically/logically unsoundly for

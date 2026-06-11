@@ -128,7 +128,11 @@ export interface MapDef {
    *  outset (M2.6). Omitted → derived in prepareBattle (blue's home band when
    *  attacking, the objective's neighbourhood when defending). */
   readonly deployZone?: readonly Hex[];
+  /** Battle-wide weather (M3): defaults to "clear". */
+  readonly weather?: Weather;
 }
+
+export type Weather = "clear" | "rain" | "night";
 
 /** Side-level off-map calls available in a battle (air support, M1). */
 export interface OffMapBudget {

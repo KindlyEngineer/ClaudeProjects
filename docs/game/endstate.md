@@ -180,4 +180,6 @@ commander needs · mechanical elevation · call signs + terrain voice.
 *Maintained as decisions land. M1 shipped (carry-over, Interlude, AAR, saves,
 off-map air, shell, MAP03) and UI-4 (tactical design language). M2 COMPLETE (mines, defender seat, Causeway, Rearguard, generator + presets) and
 M2.5 (owner pivot): component-deep unit damage + six new types incl. the `aa`
-class that contests off-map strikes. Next: M3 Character (temperaments, weather).*
+class that contests off-map strikes. M3 Character SHIPPED (temperaments + weather, D3/D4) after the owner's M2.6
+progression shift (composition + deployment, D9–D11). Next: M4 Ship (shell,
+settings, balance pass, deploy pipeline).*

@@ -3,6 +3,7 @@ import type { Side } from "../data/types";
 import { unitType } from "../data/units";
 import { assess, attackerShouldAssault } from "./assess";
 import { sustainmentNeed } from "./ai";
+import { temperamentOf } from "../data/temperaments";
 import { hasCrit, livingUnits, unitLabel, type GameState } from "./state";
 
 // The commander's REQUESTS — the legibility surface the whole design rests on.
@@ -20,6 +21,16 @@ export interface CommanderNeed {
 export function commanderNeeds(state: GameState, side: Side): CommanderNeed[] {
   const out: CommanderNeed[] = [];
   const mechs = livingUnits(state, side).filter((u) => u.controller === "ai" && unitType(u.typeId).cls === "mech");
+
+  // While the player DEPLOYS, the commanders comment on the staging — each in
+  // its own voice (M3 temperaments). The radio works both ways.
+  if (state.deployPending) {
+    for (const m of mechs) {
+      const t = temperamentOf(m.callSign);
+      if (t) out.push({ urgency: "info", text: `${unitLabel(m)} (${t.name}): "${t.voice.deploy}"` });
+    }
+    return out;
+  }
 
   // Per-mech sustainment — the resupply loop the player owns.
   for (const m of mechs) {
