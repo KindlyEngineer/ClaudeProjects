@@ -522,6 +522,15 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
   - Verified: 4 tests (formation sizing, carry + patched survivors + confirmed
     intel, annihilated types leave empty slots, JSON round-trip) — 197 total,
     uitest 18/18, self-play unchanged.
+- **H2-RECORDS — service records & the wall** ✅
+  Permanence made visible from the event stream. `OperationState.records`
+  accumulates per call sign at `recordBattle`: battles fielded, confirmed
+  kills (its own fire events), resupply runs received (the player's share of
+  its story), and — permanently — `fellAt` (the battle where it died).
+  Surfaces: the Interlude mech card carries its running tally; the operation
+  end screen now raises THE WALL — every name that served, what it did, and
+  "came home (trust N)" or "fell at <battle>". Rides the checkpoint save
+  (load guard for older checkpoints). 3 tests — 200 total.
 
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 

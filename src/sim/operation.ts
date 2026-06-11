@@ -57,6 +57,17 @@ export interface OperationState {
    *  attrition becomes operational work, and reading their remaining strength
    *  becomes operational intel. */
   enemy: UnitRecord[];
+  /** SERVICE RECORDS (H2): what each name did, accumulated from the event
+   *  stream battle by battle — permanence made visible. The fallen keep
+   *  theirs; the wall at operation's end reads them out. */
+  records: Record<string, ServiceRecord>;
+}
+
+export interface ServiceRecord {
+  battles: number; // battles fielded in
+  kills: number; // confirmed kills (its own fire, from the event stream)
+  resupplied: number; // resupply runs that reached it (the player's share of its story)
+  fellAt?: string; // the battle title where it died (permanent)
 }
 
 export function operationDef(op: OperationState): OperationDef {
@@ -132,6 +143,7 @@ export function createOperation(defId: string, seed: number): OperationState {
     trust,
     trustNotes: [],
     enemy,
+    records: {},
   };
 }
 
@@ -523,6 +535,20 @@ export function recordBattle(op: OperationState, state: GameState): void {
       r.ammo = t.weapons.map((w) => w.ammoMax);
       r.fuel = t.fuelMax;
     }
+  }
+
+  // Service records (H2): each name's battle, written from the event stream.
+  // The fallen keep theirs — the wall reads them out at operation's end.
+  op.records = op.records ?? {};
+  for (const u of state.units) {
+    if (!u.callSign || u.side !== "blue" || u.userRosterIndex === undefined) continue;
+    const rec = (op.records[u.callSign] = op.records[u.callSign] ?? { battles: 0, kills: 0, resupplied: 0 });
+    rec.battles += 1;
+    for (const e of state.events) {
+      if (e.kind === "fire" && e.id === u.id && e.destroyed) rec.kills += 1;
+      else if (e.kind === "resupply" && e.targetId === u.id) rec.resupplied += 1;
+    }
+    if (u.structure <= 0) rec.fellAt = battle.title;
   }
 
   // The trust ledger (D13): each surviving mech scores THIS battle by what it
