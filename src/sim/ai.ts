@@ -14,6 +14,7 @@ import { canMove, elevationAt, livingUnits, type GameState, type UnitInstance } 
 import { isEligible } from "./turn";
 import { isScouted } from "./vision";
 import { aiNoise } from "./ainoise";
+import { trustBand, trustWeightMul } from "./trust";
 import { temperamentOf, type Temperament } from "../data/temperaments";
 import { planForce, type Task } from "./plan";
 
@@ -295,6 +296,13 @@ export function decideUnit(state: GameState, unit: UnitInstance, task?: Task): U
   const temperament = cls === "mech" ? temperamentOf(unit.callSign) : undefined;
   if (temperament) {
     for (const [k, f] of Object.entries(temperament.weightMul)) {
+      if (weights[k] !== undefined) weights[k] *= f;
+    }
+  }
+  // Trust (Horizon 2, D13), layered after temperament: a WARY mech hedges, an
+  // ASSURED one commits — the operation's history bending this battle's maths.
+  if (cls === "mech") {
+    for (const [k, f] of Object.entries(trustWeightMul(trustBand(unit.trust)))) {
       if (weights[k] !== undefined) weights[k] *= f;
     }
   }

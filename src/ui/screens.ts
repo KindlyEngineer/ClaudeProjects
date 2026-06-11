@@ -11,8 +11,10 @@ import {
   requisitionMech,
   spendOnSupport,
   supportCount,
+  trustOf,
   type OperationState,
 } from "../sim/operation";
+import { trustBand } from "../sim/trust";
 import type { GameState } from "../sim/state";
 import { clearOperation, loadOperation, saveOperation } from "./persist";
 import { ANIM_LABEL, getSettings, updateSettings } from "./settings";
@@ -114,7 +116,7 @@ export function buildHelp(): HTMLElement {
     <div class="help-line"><b>Verbs</b> — artillery fires SUPPRESS/SMOKE area missions (needs an observer for suppress); engineers FORTIFY, MINE and BREACH; the bar holds your AIR STRIKE and OVERFLIGHT sorties.</div>
     <div class="help-line"><b>Seeing is everything</b> — nobody fires on what nobody sees. Recon, overflights and high ground buy sight; smoke, night, rain and ridges take it away.</div>
     <div class="help-line"><b>Turns</b> — recon, then fires, then maneuver. END PHASE hands the field to both AIs. RESERVE holds a unit to act later.</div>
-    <div class="help-line"><b>The commander panel</b> (top-left) is the mechs talking to you: feed what they ask for and they fight better. Each call sign has its own temperament.</div>
+    <div class="help-line"><b>The commander panel</b> (top-left) is the mechs talking to you: feed what they ask for and they fight better. Each call sign has its own temperament — and, in operations, a TRUST in your support, earned battle by battle. A WARY mech hedges; an ASSURED one commits.</div>
     <div class="help-line"><b>Operations</b> — compose your echelon (credits + cap), deploy it in the zone, fight, then the Interlude: provision your units; whatever you LEAVE in the depot is what the commander refits its mechs from. Mech death is permanent.</div>
     <div class="help-line"><b>Camera</b> — right-drag pans, wheel zooms. Esc backs out of anything.</div>`;
   box.appendChild(btn("Close", "btn", () => wrap.remove()));
@@ -147,6 +149,10 @@ export function renderInterlude(root: HTMLElement, op: OperationState): void {
             (last.mechsLost.length ? ` · lost: ${last.mechsLost.join(", ")}` : ""),
         ),
       );
+      // The trust ledger (D13): how each commander scored your support.
+      if (op.trustNotes?.length) {
+        screen.appendChild(el("div", "hint trust-notes", op.trustNotes.join("<br>")));
+      }
     }
 
     // The stockpile strip.
@@ -193,7 +199,10 @@ export function renderInterlude(root: HTMLElement, op: OperationState): void {
           btn("Disband (full refund)", "btn tiny ghost", () => (disbandSupport(op, i), save(), render())),
         );
       }
-      if (isMech && r.alive) card.appendChild(el("div", "hint", "Refitted by the commander, from the depot."));
+      if (isMech && r.alive) {
+        const tn = trustOf(op, r.callSign);
+        card.appendChild(el("div", "hint", `Trust <b>${tn}</b> — ${trustBand(tn)} · refitted by the commander, from the depot.`));
+      }
       grid.appendChild(card);
     });
     screen.appendChild(grid);
