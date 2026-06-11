@@ -17,10 +17,17 @@ export const easeInOut = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - (-2 *
 export const easeOut = (t: number): number => 1 - (1 - t) ** 2;
 export const linear = (t: number): number => t;
 
-/** Run `update(0..1)` over `dur` ms; resolves when finished. */
+let speedDivisor = 1; // settings-driven (M4): normal / fast / instant-ish
+
+export function setAnimSpeed(divisor: number): void {
+  speedDivisor = Math.max(1, divisor);
+}
+
+/** Run `update(0..1)` over `dur` ms (scaled by the speed setting); resolves
+ *  when finished. */
 export function tween(dur: number, update: (t: number) => void, ease: (t: number) => number = easeInOut): Promise<void> {
   return new Promise((resolve) => {
-    active.push({ start: now, dur: Math.max(1, dur), update, ease, resolve });
+    active.push({ start: now, dur: Math.max(1, dur / speedDivisor), update, ease, resolve });
   });
 }
 

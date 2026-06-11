@@ -15,6 +15,8 @@ import {
 } from "../sim/operation";
 import type { GameState } from "../sim/state";
 import { clearOperation, loadOperation, saveOperation } from "./persist";
+import { ANIM_LABEL, getSettings, updateSettings } from "./settings";
+import { setAnimSpeed } from "../render/anim";
 
 // The game shell (M1): title menu, the Interlude (the between-battles logistics
 // stage — the player provisions, the commander refits), the After-Action Report
@@ -77,14 +79,48 @@ export function renderMenu(root: HTMLElement): void {
     box.appendChild(btn(label, "btn menu-btn menu-alt", () => nav(query)));
   }
   screen.appendChild(box);
+
+  // Settings (M4): tiny and persisted.
+  const settingsRow = el("div", "interlude-row");
+  const speedBtn = btn(`Animation: ${ANIM_LABEL[String(getSettings().animSpeed)]}`, "btn tiny", () => {
+    const order: Array<1 | 2.5 | 6> = [1, 2.5, 6];
+    const next = order[(order.indexOf(getSettings().animSpeed) + 1) % order.length];
+    updateSettings({ animSpeed: next });
+    setAnimSpeed(next);
+    speedBtn.textContent = `Animation: ${ANIM_LABEL[String(next)]}`;
+  });
+  settingsRow.appendChild(speedBtn);
+  settingsRow.appendChild(btn("How to play", "btn tiny", () => root.appendChild(buildHelp())));
+  screen.appendChild(settingsRow);
+
   screen.appendChild(
     el(
       "div",
       "menu-foot",
-      OPERATIONS.op01.blurb,
+      OPERATIONS.op01.blurb + "<br><span class='ver'>VANTAGE 0.9 — the Horizons build</span>",
     ),
   );
   root.appendChild(screen);
+}
+
+/** The rules reference (M4): everything a stranger needs, one overlay. */
+export function buildHelp(): HTMLElement {
+  const wrap = el("div", "help-wrap");
+  const box = el("div", "help-box");
+  box.innerHTML = `
+    <div class="aar-head">HOW TO PLAY</div>
+    <div class="help-line"><b>You never command the mechs.</b> They fight their own battle. You run the support: scouts, guns, engineers, trucks, air.</div>
+    <div class="help-line"><b>Orders</b> — select one of YOUR units (card or board). Hold a blue hex and drag to move with a chosen facing; hold the unit itself to turn in place. Click a red enemy to fire, a green ally to resupply.</div>
+    <div class="help-line"><b>Verbs</b> — artillery fires SUPPRESS/SMOKE area missions (needs an observer for suppress); engineers FORTIFY, MINE and BREACH; the bar holds your AIR STRIKE and OVERFLIGHT sorties.</div>
+    <div class="help-line"><b>Seeing is everything</b> — nobody fires on what nobody sees. Recon, overflights and high ground buy sight; smoke, night, rain and ridges take it away.</div>
+    <div class="help-line"><b>Turns</b> — recon, then fires, then maneuver. END PHASE hands the field to both AIs. RESERVE holds a unit to act later.</div>
+    <div class="help-line"><b>The commander panel</b> (top-left) is the mechs talking to you: feed what they ask for and they fight better. Each call sign has its own temperament.</div>
+    <div class="help-line"><b>Operations</b> — compose your echelon (credits + cap), deploy it in the zone, fight, then the Interlude: provision your units; whatever you LEAVE in the depot is what the commander refits its mechs from. Mech death is permanent.</div>
+    <div class="help-line"><b>Camera</b> — right-drag pans, wheel zooms. Esc backs out of anything.</div>`;
+  box.appendChild(btn("Close", "btn", () => wrap.remove()));
+  wrap.appendChild(box);
+  wrap.addEventListener("click", (e) => { if (e.target === wrap) wrap.remove(); });
+  return wrap;
 }
 
 // ── The Interlude (provision, never task) ─────────────────────────────────────

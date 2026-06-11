@@ -14,7 +14,7 @@ import { callReconFlight, callStrike, canCallReconFlight, canCallStrike } from "
 import { recordBattle, type OperationState } from "../sim/operation";
 import { planForce } from "../sim/plan";
 import { saveOperation } from "./persist";
-import { buildAAR } from "./screens";
+import { buildAAR, buildHelp } from "./screens";
 import { directionTo, hexDistance, hexEquals, hexKey, hexToWorld, neighbor, worldToHex, type Direction, type Hex } from "../sim/hex";
 import { evaluateOutcome } from "../sim/objective";
 import { pathTo, type ReachNode } from "../sim/pathing";
@@ -718,7 +718,8 @@ export function startInteractive(
             });
           }
         }
-        mkBtn(`End ${state.phase} phase`, "btn", endPhase);
+        mkBtn("?", "btn btn-alt", () => document.body.appendChild(buildHelp()));
+      mkBtn(`End ${state.phase} phase`, "btn", endPhase);
       }
     }
   }

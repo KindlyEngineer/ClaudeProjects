@@ -415,6 +415,28 @@ Each slice ends testable and screenshot/headless-verified; gate between slices.
     weather vision/mud/night-battle soundness); self-play ELEVEN-scenario-state
     0 invariant violations; 18 e2e checks green.
 
+- **M4 — the thin 1.0 gate (Horizon 1, ruling D12)** ✅
+  - **Deploy pipeline**: `.github/workflows/deploy.yml` — every push to main
+    runs the test suite, builds, and publishes to GitHub Pages (Vite's relative
+    base makes the bundle path-agnostic). Version 0.9.0 "the Horizons build".
+  - **Settings** (`ui/settings.ts`, persisted): animation speed
+    Normal/Fast/Instant feeding the tween scheduler; the audio mute hangs here
+    when D14 lands.
+  - **How-to-play overlay**: the full rules reference, reachable from the menu
+    and the in-battle `?` button — the stranger-playability gate.
+  - **Balance pass** (20 seeds × 9 scenarios, 0 invariant violations, all
+    decisive). The documented family — unaided-AI attacker win rates; the
+    PLAYER'S support is always the intended margin:
+    Ridge Seize 5% · Ridge Breakthrough 5% (prepared defence on commanding
+    ground; the proof's supported side still clears ≥60%) · Steppe 85%
+    (attacker superiority exercises the assault branch) · The Gap 0% (operation
+    finale — needs everything banked) · Watchline 60% (the defence needs your
+    engineering) · Causeway 0%→tuned (+2 turns for the mud; the smoke lesson
+    stays mandatory) · Rearguard 70% (night now shelters the thin rearguard) ·
+    Random ~60% ± seed variance. M3's temperaments and weather shifted several
+    families coherently (methodical leads attack less recklessly unaided; rain
+    punishes crossings) — verified intended, not drift.
+
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 
 Per the owner: the AI must (a) never behave tactically/logically unsoundly for
