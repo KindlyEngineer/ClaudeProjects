@@ -204,7 +204,7 @@ multiply them.
 | Persistent enemy force | The opposing formation carries ITS losses/damage across the operation; scouting their remaining strength becomes operational intel. |
 | Service records & the wall | Kill tallies, battle honors, the fallen remembered by name — permanence made visible from the event stream. |
 | Generated/branching operations | Seeded campaign generation on the map generator + force budgets; handcrafted ops branch on outcomes. |
-| **Audio** (D14 — brief AMENDED) | Procedural/synthesized only (Web Audio, no asset pipeline): radio crackle under commander lines, fire/impact reports, ambient weather. |
+| **Audio** (D14 — brief AMENDED) ✅ | Procedural/synthesized only (Web Audio, no asset pipeline): radio crackle under commander lines, fire/impact reports, ambient weather. **Shipped** (H2-AUDIO): pure event→sound vocabulary on the fog-gated stream, ambient rain/night, settings mute. |
 
 ### Horizon 3 — "The Deep Battlefield"
 Counter-battery radar + pre-planned/rolling barrages · illumination flares vs

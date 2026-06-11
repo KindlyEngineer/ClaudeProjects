@@ -13,6 +13,7 @@ import { commanderNeeds } from "../sim/needs";
 import { callReconFlight, callStrike, canCallReconFlight, canCallStrike } from "../sim/offmap";
 import { recordBattle, type OperationState } from "../sim/operation";
 import { planForce } from "../sim/plan";
+import { playEventSound, setAmbient, unlockAudio } from "./audio";
 import { saveOperation } from "./persist";
 import { buildAAR, buildHelp } from "./screens";
 import { directionTo, hexDistance, hexEquals, hexKey, hexToWorld, neighbor, worldToHex, type Direction, type Hex } from "../sim/hex";
@@ -111,6 +112,11 @@ export function startInteractive(
   view.frame(stage.bounds.min, stage.bounds.max);
   let overlayGroup: THREE.Group | null = null;
 
+  // Audio (D14): the context unlocks on the first gesture (autoplay policy);
+  // the weather is audible the moment it may be (rain on the hull, night wind).
+  window.addEventListener("pointerdown", unlockAudio, { once: true });
+  setAmbient(state.weather);
+
   // Event stream cursor: everything before "now" becomes log history (no
   // animation for the opening upkeep), everything after plays back.
   let cursor = 0;
@@ -166,6 +172,7 @@ export function startInteractive(
       while (cursor < state.events.length) {
         const ev = state.events[cursor++];
         appendLog(ev);
+        if (ev.kind === "turn" || eventVisible(ev)) playEventSound(ev); // hear what you may see (D14)
         renderLog();
         await stage.play(ev);
       }
