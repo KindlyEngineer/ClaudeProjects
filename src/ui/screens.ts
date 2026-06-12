@@ -7,6 +7,7 @@ import {
   createOperation,
   disbandSupport,
   finishInterlude,
+  interludeBrief,
   operationDef,
   requisitionMech,
   spendOnSupport,
@@ -17,7 +18,7 @@ import {
 import { trustBand } from "../sim/trust";
 import type { GameState } from "../sim/state";
 import { clearOperation, loadOperation, saveOperation } from "./persist";
-import { ANIM_LABEL, getSettings, updateSettings } from "./settings";
+import { ANIM_LABEL, getSettings, playerCallSign, updateSettings } from "./settings";
 import { setAnimSpeed } from "../render/anim";
 
 // The game shell (M1): title menu, the Interlude (the between-battles logistics
@@ -40,6 +41,37 @@ function btn(label: string, cls: string, onClick: () => void): HTMLElement {
   const b = el("button", cls, label);
   b.addEventListener("click", onClick);
   return b;
+}
+
+// ── The call-sign prompt (the player's name on the net) ──────────────────────
+
+/** Ask for (or edit) the player's call sign. The commanders address the player
+ *  by it — the reciprocal half of the relationship. Blank is allowed: the
+ *  dialogue simply stays undirected. */
+export function buildCallSignPrompt(onDone: (name: string) => void): HTMLElement {
+  const wrap = el("div", "help-wrap");
+  const box = el("div", "help-box cs-box");
+  box.appendChild(el("div", "aar-head", "CALL SIGN"));
+  box.appendChild(el("div", "help-line", "What do your commanders call you on the net? (Leave blank to stay unnamed.)"));
+  const input = document.createElement("input");
+  input.className = "cs-input";
+  input.maxLength = 16;
+  input.value = playerCallSign();
+  input.placeholder = "e.g. Andrew";
+  box.appendChild(input);
+  const confirm = (): void => {
+    const name = input.value.trim().slice(0, 16);
+    updateSettings({ callSign: name });
+    wrap.remove();
+    onDone(name);
+  };
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") confirm();
+  });
+  box.appendChild(btn("Confirm", "btn", confirm));
+  wrap.appendChild(box);
+  setTimeout(() => input.focus(), 0);
+  return wrap;
 }
 
 // ── Title menu ────────────────────────────────────────────────────────────────
@@ -66,19 +98,24 @@ export function renderMenu(root: HTMLElement): void {
       }),
     );
   }
-  box.appendChild(
-    btn("New Operation — Eastern Gate", "btn menu-btn", () => {
-      const op = createOperation("op01", ((Date.now() / 60000) | 0) % 10000 || 1); // a fresh, loggable seed
+  // Starting an operation asks for the player's call sign first (once — it
+  // persists): the commanders address the player by name from the Interlude on.
+  const startOp = (defId: string, seed: number): void => {
+    const begin = (): void => {
+      const op = createOperation(defId, seed);
       saveOperation(op);
-      nav(`?op=op01&interlude=1`);
-    }),
+      nav(`?op=${defId}&interlude=1`);
+    };
+    if (playerCallSign()) begin();
+    else root.appendChild(buildCallSignPrompt(begin));
+  };
+  box.appendChild(
+    btn("New Operation — Eastern Gate", "btn menu-btn", () => startOp("op01", ((Date.now() / 60000) | 0) % 10000 || 1)),
   );
   box.appendChild(
-    btn(`New Operation — Generated front (seed ${((Date.now() / 1000) | 0) % 100000})`, "btn menu-btn", () => {
-      const op = createOperation("genop", ((Date.now() / 1000) | 0) % 100000 || 1); // H2: a seeded campaign
-      saveOperation(op);
-      nav(`?op=genop&interlude=1`);
-    }),
+    btn(`New Operation — Generated front (seed ${((Date.now() / 1000) | 0) % 100000})`, "btn menu-btn", () =>
+      startOp("genop", ((Date.now() / 1000) | 0) % 100000 || 1),
+    ),
   );
   for (const [label, query] of [
     ["Skirmish — Ridge Approach", "?map=ridge&seed=1"],
@@ -110,6 +147,10 @@ export function renderMenu(root: HTMLElement): void {
     audioBtn.textContent = `Audio: ${next ? "On" : "Off"}`;
   });
   settingsRow.appendChild(audioBtn);
+  const csBtn = btn(`Call sign: ${playerCallSign() || "—"}`, "btn tiny", () => {
+    root.appendChild(buildCallSignPrompt((name) => (csBtn.textContent = `Call sign: ${name || "—"}`)));
+  });
+  settingsRow.appendChild(csBtn);
   settingsRow.appendChild(btn("How to play", "btn tiny", () => root.appendChild(buildHelp())));
   screen.appendChild(settingsRow);
 
@@ -157,6 +198,11 @@ export function renderInterlude(root: HTMLElement, op: OperationState): void {
     screen.appendChild(el("div", "subtitle", `Interlude — preparing ${battle.title}`));
     const wx = mapById(battle.mapId).weather ?? "clear";
     screen.appendChild(el("div", "briefing", battle.briefing + (wx === "clear" ? "" : ` <b>Forecast: ${wx.toUpperCase()}.</b>`)));
+
+    // The commander's word: the senior surviving mech opens the Interlude
+    // addressing the player by call sign — the relationship runs both ways.
+    const brief = interludeBrief(op, playerCallSign());
+    screen.appendChild(el("div", "aar-voice brief-voice", `${brief.speaker}: "${brief.text}"`));
 
     if (op.history.length > 0) {
       const last = op.history[op.history.length - 1];
@@ -340,16 +386,18 @@ export function buildAAR(state: GameState, op: OperationState, onContinue: () =>
   if (contrib.length === 0) lines.appendChild(el("div", "aar-line", "— the echelon never made its weight felt —"));
   for (const x of contrib) lines.appendChild(el("div", "aar-line", `▸ ${x.n} ${x.label}`));
 
-  // The commander's word — the relationship, closing the loop.
+  // The commander's word — the relationship, closing the loop. Addressed to the
+  // player by call sign when they have one; undirected when they don't.
   const mechs = state.units.filter((u) => u.callSign);
   const speaker = mechs.find((u) => u.structure > 0)?.callSign ?? "Command";
+  const you = playerCallSign();
   const voice = won
     ? contrib.length > 0
-      ? `${speaker}: "We made it because the rounds kept coming and the guns ahead of us went quiet. That was you."`
-      : `${speaker}: "We took it alone this time. Don't make a habit of it."`
+      ? `${speaker}: "We made it because the rounds kept coming and the guns ahead of us went quiet. That was you${you ? `, ${you}` : ""}."`
+      : `${speaker}: "We took it alone this time. Don't make a habit of it${you ? `, ${you}` : ""}."`
     : lost.length > 0
-      ? `${speaker}: "We lost ${lost.join(" and ")} out there. We needed more than we had."`
-      : `${speaker}: "They held. Get us refit — we're not done."`;
+      ? `${speaker}: "We lost ${lost.join(" and ")} out there. ${you ? `${you}, we` : "We"} needed more than we had."`
+      : `${speaker}: "They held. Get us refit${you ? `, ${you}` : ""} — we're not done."`;
   lines.appendChild(el("div", "aar-voice", voice));
   if (lost.length) lines.appendChild(el("div", "aar-lost", `Lost in action: ${lost.join(", ")} — permanent.`));
   box.appendChild(lines);

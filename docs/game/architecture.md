@@ -574,6 +574,25 @@ wall, generated operations. Horizon 3 ("The Deep Battlefield") is the next arc.
     live on the cards, the inspect panel and the transcript. The play area
     holds units, terrain and overlays — nothing else.
   - Verified: 208 tests, uitest 18/18, screenshot `docs/shots/comms-column.png`.
+- **UX-NAME — the player's call sign (owner addition)** ✅
+  The relationship now runs BOTH ways: the mechs have names, temperaments and
+  trust; the player has a name the commanders use.
+  - *The name*: persisted in settings (follows the player, not the save);
+    prompted once when starting an operation, editable from the menu settings
+    row. Blank is allowed — the dialogue simply stays undirected (never
+    "Hey, ''"; the unnamed variant re-capitalizes).
+  - *The brief* (`sim/operation.interludeBrief`, pure — the name is a
+    PARAMETER, the sim never reads settings): the senior surviving mech opens
+    every Interlude addressing the player, state-aware in priority order —
+    the dead outrank the depot ("Andrew, we buried Saber after…"), the depot
+    outranks comfort ("Andrew, supplies are thin. How do you want to resupply
+    before Battle II…"), then defeat, damage, readiness.
+  - *The other surfaces*, kept tasteful rather than everywhere: the AAR
+    voice addresses the player by name; the lead mech opens the deployment
+    net with it in the COMMS transcript.
+  - Verified: 5 brief tests (priority order, the owner's exact thin-depot
+    scenario, the dead don't speak, unnamed capitalization) — 213 total,
+    uitest 18/18, screenshot `docs/shots/interlude-brief.png`.
 
 ## AI milestone (the v1 core — sound, role-aware, fog-limited)
 

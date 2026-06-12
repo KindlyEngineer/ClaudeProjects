@@ -256,6 +256,15 @@
       .help-line b { color: var(--ink); }
       .menu-foot .ver { color: #3a4047; font-size: 9px; letter-spacing: 2px; }
       .aar-lost { font-size: 10.5px; color: var(--hostile); font-weight: 700; margin-top: 8px; letter-spacing: 0.5px; text-transform: uppercase; }
+      /* The call-sign prompt + the commander's Interlude word. */
+      .cs-box { min-width: 320px; }
+      .cs-input {
+        display: block; width: 100%; box-sizing: border-box; margin: 12px 0 14px;
+        font: inherit; font-size: 13px; letter-spacing: 1px; color: var(--amber-hi, #e8b964);
+        background: #0e1013; border: 1px solid var(--line); border-radius: 2px; padding: 8px 10px;
+      }
+      .cs-input:focus { outline: none; border-color: var(--amber); }
+      .brief-voice { max-width: min(96vw, 760px); margin-top: 4px; }
     </style>
   </head>
   <body>
