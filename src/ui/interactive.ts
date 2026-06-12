@@ -15,6 +15,7 @@ import { callReconFlight, callStrike, canCallReconFlight, canCallStrike } from "
 import { recordBattle, type OperationState } from "../sim/operation";
 import { planForce } from "../sim/plan";
 import { playEventSound, setAmbient, unlockAudio } from "./audio";
+import { playerCallSign } from "./settings";
 import { saveOperation } from "./persist";
 import { buildAAR, buildHelp } from "./screens";
 import { directionTo, hexDistance, hexEquals, hexKey, hexToWorld, neighbor, worldToHex, type Direction, type Hex } from "../sim/hex";
@@ -189,6 +190,13 @@ export function startInteractive(
       if (cut > 0) pushComms(line.slice(0, cut), line.slice(cut + 2), line.includes("REQUEST"));
       else pushComms("DEPOT", line);
     }
+  }
+  // At the staging line, the lead mech opens the net — by the player's call
+  // sign when they have one. The relationship talks both ways.
+  if (deploying) {
+    const lead = livingUnits(state, playerSide).find((u) => u.controller === "ai" && u.callSign);
+    const you = playerCallSign();
+    if (lead) pushComms(unitLabel(lead), `"Your show until the line is set${you ? `, ${you}` : ""}. Place them well."`);
   }
   for (; cursor < state.events.length; cursor++) appendLog(state.events[cursor]);
 

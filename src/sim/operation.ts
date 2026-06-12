@@ -601,6 +601,43 @@ export function recordBattle(op: OperationState, state: GameState): void {
   }
 }
 
+// ── The commander's word at the Interlude (the relationship, both ways) ──────
+
+/** The senior commander OPENS each Interlude addressing the player by name —
+ *  the reciprocal half of the relationship (the mechs have names, temperaments
+ *  and trust; the player has a call sign they use). One line, state-aware, in
+ *  priority order: the dead outrank the depot, the depot outranks comfort.
+ *  Pure and deterministic: the name is a PARAMETER — the sim never reads
+ *  settings. Unnamed players get the same line, undirected. */
+export function interludeBrief(op: OperationState, playerName?: string): { speaker: string; text: string } {
+  const def = operationDef(op);
+  const speaker = op.roster.find((r) => r.alive && r.callSign && unitType(r.typeId).cls === "mech")?.callSign ?? "COMMAND";
+  const next = def.battles[op.battleIndex]?.title ?? "the next battle";
+  const last = op.history[op.history.length - 1];
+  const s = op.stockpile;
+  const supplyThin = s.ammo < 20 || s.fuel < 30 || s.repair < 15;
+  const hurt = op.roster.some(
+    (r) => r.alive && unitType(r.typeId).cls === "mech" && (r.structure < unitType(r.typeId).structure || r.componentsLost.length > 0),
+  );
+
+  let line: string;
+  if (last && last.mechsLost.length > 0) {
+    line = `we buried ${last.mechsLost.join(" and ")} after ${last.title}. Spend whatever it takes — I won't lose another name to an empty depot.`;
+  } else if (supplyThin) {
+    line = `supplies are thin. How do you want to resupply before ${next} — what rides with us, and what stays in the depot for my refit?`;
+  } else if (last && !last.won) {
+    line = `they held us at ${last.title}. Get the force refit and find me a better way in.`;
+  } else if (hurt) {
+    line = `we took a beating out there. Whatever you leave in the depot, I'll put back into armour — the rest is on your trucks.`;
+  } else {
+    line = `the force is ready and the depot is sound. Buy well, and set us a good line of departure for ${next}.`;
+  }
+
+  const name = playerName?.trim();
+  const text = name ? `${name}, ${line}` : line.charAt(0).toUpperCase() + line.slice(1);
+  return { speaker, text };
+}
+
 // The roster links travel on the unit so recording survives serialization-free.
 declare module "./state" {
   interface UnitInstance {
